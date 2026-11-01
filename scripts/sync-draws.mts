@@ -15,6 +15,7 @@ type ApiDraw = {
   bonus: number;
   ranks: { rank: number; winners: number; prize: number }[];
   totalSales: number;
+  firstPrizePickTypes: { auto: number; manual: number; semiAuto: number } | null;
 };
 
 const root = resolve(import.meta.dirname, '..');
@@ -33,6 +34,9 @@ const rows = draws.map((d) => [
   d.bonus,
   ...d.ranks.flatMap((r) => [r.winners, r.prize]),
   d.totalSales,
+  d.firstPrizePickTypes?.auto ?? null,
+  d.firstPrizePickTypes?.manual ?? null,
+  d.firstPrizePickTypes?.semiAuto ?? null,
 ]);
 writeFileSync(resolve(root, 'src/data/draws.json'), `[\n${rows.map((r) => JSON.stringify(r)).join(',\n')}\n]\n`);
 

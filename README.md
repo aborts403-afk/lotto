@@ -12,6 +12,7 @@
 | `GET /api/latest` | 최신 회차 |
 | `GET /api/draws?limit=N` | 회차 목록 (최신순, limit 생략 시 전체) |
 | `GET /api/draws/:round` | 특정 회차 |
+| `GET /api/draws/:round/stores` | 1·2등 당첨 판매점 |
 | `GET /api/health` | 수집 상태 (최신 회차가 8일 넘게 지나면 503) |
 
 ## 당첨번호 수집
@@ -19,9 +20,21 @@
 - 매주 자동: Worker 크론이 "마지막 회차 + 1"을 조회해 저장합니다. 토요일 20:45~21:25 KST 5분마다, 21:30~23:45 KST 15분마다, 일요일 09:00 KST 한 번.
 - 최초 1회 전체 수집:
   ```
-  node scripts/backfill-draws.ts > worker/backfill.sql
+  npx tsx scripts/backfill-draws.mts > worker/backfill.sql
   npx wrangler d1 execute lotto-db --remote --file worker/backfill.sql
   ```
+
+## 저장하는 데이터 (D1)
+- `draws`: 당첨번호 API의 모든 필드. 1등 자동/수동/반자동 인원(`auto_winners` 등)은 262회부터 있습니다.
+- `winning_tickets`: 1·2등 당첨 1건마다 판매점 API의 모든 필드 (판매점, 주소, 지역, 위경도, 자동/수동, 인터넷 구매는 `store_id = '51100000'`). 262회부터 있습니다.
+- 처음 한 번 판매점 전체 수집:
+  ```
+  DELAY_MS=2000 npx tsx scripts/backfill-stores.mts > worker/backfill-stores.sql
+  npx wrangler d1 execute lotto-db --remote --file worker/backfill-stores.sql
+  ```
+  응답은 `worker/.cache/stores`에 캐시돼서, 중간에 끊겨도 이어서 받습니다. 너무 빨리 요청하면 동행복권이 IP를 일시적으로 막아요.
+- 매주 크론이 최근 4개 회차의 판매점 데이터를 당첨자 수와 맞을 때까지 다시 확인합니다.
+- API에 아직 저장하지 않는 새 필드가 생기면 `meta.unknown_fields`에 기록됩니다.
 
 ## 번호 생성기 (남들이 안 고르는 번호)
 - 당첨 확률은 모든 조합이 같고, 다른 사람과 겹칠 가능성(1등 상금을 나눌 사람 수)만 다릅니다.

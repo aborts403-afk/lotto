@@ -1,7 +1,17 @@
 // lotto-note Worker: serves the Expo web build (static assets) and the /api/* routes,
 // and collects new draw results on a cron schedule (see `triggers` in wrangler.jsonc).
-import { getMeta, insertDrawStmt, latestRound, setMeta, toApi, type DrawRow } from './db';
-import { fetchAround } from './dhlottery';
+import {
+  getMeta,
+  latestRound,
+  replaceTicketsStmts,
+  setMeta,
+  ticketToApi,
+  toApi,
+  upsertDrawStmt,
+  type DrawRow,
+  type TicketRow,
+} from './db';
+import { fetchAround, fetchWinningTickets, FIRST_ROUND_WITH_STORES, unknownKeysSeen } from './dhlottery';
 
 type Env = {
   DB: D1Database;
@@ -10,8 +20,33 @@ type Env = {
 
 // Max lookups per run; each lookup can return several rounds, so this also covers multi-week gaps.
 const MAX_LOOKUPS_PER_RUN = 5;
+// Winning-store lists can appear later than the numbers, so recent rounds are re-checked until
+// the number of store rows matches the 1st/2nd prize winner counts.
+const STORE_SYNC_RECENT_ROUNDS = 4;
 
-export async function collect(env: Env): Promise<{ added: number[] }> {
+async function syncRecentStores(env: Env): Promise<number[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT d.round,
+            d.rank1_winners AS w1, (SELECT COUNT(*) FROM winning_tickets t WHERE t.round = d.round AND t.rank = 1) AS t1,
+            d.rank2_winners AS w2, (SELECT COUNT(*) FROM winning_tickets t WHERE t.round = d.round AND t.rank = 2) AS t2
+       FROM draws d WHERE d.round >= ? ORDER BY d.round DESC LIMIT ?`,
+  )
+    .bind(FIRST_ROUND_WITH_STORES, STORE_SYNC_RECENT_ROUNDS)
+    .all<{ round: number; w1: number; t1: number; w2: number; t2: number }>();
+  const synced: number[] = [];
+  for (const r of results) {
+    if (r.w1 === r.t1 && r.w2 === r.t2) continue;
+    for (const rank of [1, 2] as const) {
+      const tickets = await fetchWinningTickets(r.round, rank);
+      if (tickets.length === 0) continue; // not published yet; keep what we have
+      await env.DB.batch(replaceTicketsStmts(env.DB, r.round, rank, tickets));
+    }
+    synced.push(r.round);
+  }
+  return synced;
+}
+
+export async function collect(env: Env): Promise<{ added: number[]; storesSynced: number[] }> {
   const added: number[] = [];
   const now = new Date().toISOString();
   await setMeta(env.DB, 'last_run_at', now);
@@ -20,16 +55,22 @@ export async function collect(env: Env): Promise<{ added: number[] }> {
     for (let i = 0; i < MAX_LOOKUPS_PER_RUN; i++) {
       const fresh = (await fetchAround(latest + 1)).filter((d) => d.round > latest);
       if (fresh.length === 0) break;
-      await env.DB.batch(fresh.map((d) => insertDrawStmt(env.DB, d)));
+      await env.DB.batch(fresh.map((d) => upsertDrawStmt(env.DB, d)));
       added.push(...fresh.map((d) => d.round));
       latest = Math.max(...fresh.map((d) => d.round));
     }
+    const storesSynced = await syncRecentStores(env);
     await setMeta(env.DB, 'last_success_at', now);
     await setMeta(env.DB, 'last_error', '');
     added.sort((a, b) => a - b);
     if (added.length) await setMeta(env.DB, 'last_added', added.join(','));
-    console.log(JSON.stringify({ event: 'collect', added }));
-    return { added };
+    if (storesSynced.length) await setMeta(env.DB, 'last_stores_synced', `${now} ${storesSynced.join(',')}`);
+    if (unknownKeysSeen.size) {
+      await setMeta(env.DB, 'unknown_fields', [...unknownKeysSeen].sort().join(','));
+      console.warn(JSON.stringify({ event: 'unknown_fields', fields: [...unknownKeysSeen] }));
+    }
+    console.log(JSON.stringify({ event: 'collect', added, storesSynced }));
+    return { added, storesSynced };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await setMeta(env.DB, 'last_error', `${now} ${message}`);
@@ -72,6 +113,17 @@ async function handleApi(url: URL, env: Env): Promise<Response> {
   if (one) {
     const row = await env.DB.prepare('SELECT * FROM draws WHERE round = ?').bind(Number(one[1])).first<DrawRow>();
     return row ? json(toApi(row), { maxAge: 3600 }) : json({ error: 'not found' }, { status: 404 });
+  }
+
+  const stores = path.match(/^\/api\/draws\/(\d+)\/stores$/);
+  if (stores) {
+    const { results } = await env.DB.prepare(
+      `SELECT round, rank, seq, store_id, store_name, address, region, pick_type, lat, lng, phone, status
+         FROM winning_tickets WHERE round = ? ORDER BY rank, seq`,
+    )
+      .bind(Number(stores[1]))
+      .all<TicketRow>();
+    return json(results.map(ticketToApi), { maxAge: 3600 });
   }
 
   if (path === '/api/health') {

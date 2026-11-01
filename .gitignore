@@ -50,3 +50,5 @@ example
 worker/backfill.sql
 .wrangler/
 .venv/
+worker/backfill-stores.sql
+worker/.cache/

@@ -8,11 +8,14 @@ export type Draw = {
   bonus: number;
   ranks: readonly { winners: number; prize: number }[]; // index 0 = 1st prize; prize is per winner (KRW)
   totalSales: number; // KRW
+  // 1st-prize winners by how the ticket was picked; null when the source has no breakdown (before ~round 262).
+  firstPrizePickTypes: { auto: number; manual: number; semiAuto: number } | null;
 };
 
-type Row = (string | number)[];
+type Row = (string | number | null)[];
 
-// Row: [round, drawDate, n1..n6, bonus, rank1Winners, rank1Prize, ..., rank5Winners, rank5Prize, totalSales]
+// Row: [round, drawDate, n1..n6, bonus, rank1Winners, rank1Prize, ..., rank5Winners, rank5Prize, totalSales,
+//       firstPrizeAuto, firstPrizeManual, firstPrizeSemiAuto]
 function decodeRow(r: Row): Draw {
   const n = (i: number) => r[i] as number;
   return {
@@ -22,6 +25,7 @@ function decodeRow(r: Row): Draw {
     bonus: n(8),
     ranks: [0, 1, 2, 3, 4].map((k) => ({ winners: n(9 + k * 2), prize: n(10 + k * 2) })),
     totalSales: n(19),
+    firstPrizePickTypes: r[20] === null || r[20] === undefined ? null : { auto: n(20), manual: n(21), semiAuto: n(22) },
   };
 }
 
