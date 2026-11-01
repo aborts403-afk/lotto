@@ -121,26 +121,104 @@ export function lessPopularThanPercent(combo: Combo): number {
 
 export type GeneratedCombo = { numbers: Combo; lessPopularThan: number };
 
+export type GenerateMode = 'unpopular' | 'random';
+
+export type GenerateOptions = {
+  mode: GenerateMode;
+  count: number;
+  fixed?: readonly number[]; // always included
+  excluded?: readonly number[]; // never included
+  oddCount?: number | null; // exact number of odd numbers, null = any
+  sumRange?: readonly [number, number] | null; // inclusive, null = any
+};
+
+export type GenerateError =
+  | 'tooManyFixed' // more than 5 fixed numbers
+  | 'notEnoughNumbers' // exclusions leave fewer than 6 numbers
+  | 'oddEvenImpossible' // fixed/excluded numbers make the odd/even split impossible
+  | 'noMatch'; // nothing satisfied the conditions (usually the sum range)
+
+export type GenerateResult = {
+  sets: GeneratedCombo[];
+  error?: GenerateError;
+  // Unpopular mode only: fixed or excluded numbers forced some "people pick this on purpose" shapes back in.
+  patternsRelaxed?: boolean;
+};
+
+export const MAX_FIXED = 5;
+
 const CANDIDATES = 4000;
-const POOL_FRACTION = 0.1; // pick from the least-popular 10% of pattern-free candidates
+const MAX_ATTEMPTS = 40000;
+const POOL_FRACTION = 0.1; // unpopular mode: pick from the least-popular 10% of pattern-free candidates
+
+function sample<T>(from: readonly T[], k: number, rng: () => number): T[] {
+  const a = [...from];
+  for (let i = 0; i < k; i++) {
+    const j = i + Math.floor(rng() * (a.length - i));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, k);
+}
+
+export function generate(options: GenerateOptions, rng: () => number = Math.random): GenerateResult {
+  const { mode, count } = options;
+  const fixed = [...new Set(options.fixed ?? [])];
+  const excluded = new Set(options.excluded ?? []);
+  const oddCount = options.oddCount ?? null;
+  const sumRange = options.sumRange ?? null;
+
+  if (fixed.length > MAX_FIXED) return { sets: [], error: 'tooManyFixed' };
+  const free = Array.from({ length: 45 }, (_, i) => i + 1).filter((n) => !excluded.has(n) && !fixed.includes(n));
+  const need = 6 - fixed.length;
+  if (free.length < need) return { sets: [], error: 'notEnoughNumbers' };
+
+  // With an odd/even condition, draw the odd and even parts separately so every candidate satisfies it.
+  const freeOdd = free.filter((n) => n % 2 === 1);
+  const freeEven = free.filter((n) => n % 2 === 0);
+  let needOdd = 0;
+  if (oddCount !== null) {
+    needOdd = oddCount - fixed.filter((n) => n % 2 === 1).length;
+    const needEven = need - needOdd;
+    if (needOdd < 0 || needEven < 0 || needOdd > freeOdd.length || needEven > freeEven.length) {
+      return { sets: [], error: 'oddEvenImpossible' };
+    }
+  }
+
+  const draw = (): Combo => {
+    const picked = oddCount === null ? sample(free, need, rng) : [...sample(freeOdd, needOdd, rng), ...sample(freeEven, need - needOdd, rng)];
+    return [...fixed, ...picked].sort((a, b) => a - b);
+  };
+  const inSum = (c: Combo) => {
+    if (!sumRange) return true;
+    const sum = c.reduce((a, b) => a + b, 0);
+    return sum >= sumRange[0] && sum <= sumRange[1];
+  };
+
+  // Collect distinct candidates that satisfy every condition.
+  const target = mode === 'random' ? count : CANDIDATES;
+  const candidates = new Map<string, Combo>();
+  for (let i = 0; i < MAX_ATTEMPTS && candidates.size < target; i++) {
+    const c = draw();
+    if (inSum(c)) candidates.set(c.join(','), c);
+  }
+  if (candidates.size === 0) return { sets: [], error: 'noMatch' };
+
+  const toResult = (c: Combo): GeneratedCombo => ({ numbers: c, lessPopularThan: lessPopularThanPercent(c) });
+
+  if (mode === 'random') return { sets: [...candidates.values()].slice(0, count).map(toResult) };
+
+  let pool = [...candidates.values()];
+  let patternsRelaxed = false;
+  const patternFree = pool.filter((c) => patternFlags(c).length === 0);
+  if (patternFree.length >= count) pool = patternFree;
+  else patternsRelaxed = true;
+
+  const scored = pool.map((combo) => ({ combo, score: popularityScore(combo) })).sort((a, b) => a.score - b.score);
+  const best = scored.slice(0, Math.max(count, Math.floor(scored.length * POOL_FRACTION)));
+  const picks = sample(best.map((s) => s.combo), Math.min(count, best.length), rng);
+  return { sets: picks.map(toResult), patternsRelaxed };
+}
 
 export function generateUnpopular(count = 5, rng: () => number = Math.random): GeneratedCombo[] {
-  const candidates: { combo: Combo; score: number }[] = [];
-  for (let i = 0; i < CANDIDATES; i++) {
-    const combo = randomCombo(rng);
-    if (patternFlags(combo).length === 0) candidates.push({ combo, score: popularityScore(combo) });
-  }
-  candidates.sort((a, b) => a.score - b.score);
-  const pool = candidates.slice(0, Math.max(count, Math.floor(candidates.length * POOL_FRACTION)));
-
-  const picked: GeneratedCombo[] = [];
-  const seen = new Set<string>();
-  while (picked.length < count && seen.size < pool.length) {
-    const { combo } = pool[Math.floor(rng() * pool.length)];
-    const key = combo.join(',');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    picked.push({ numbers: combo, lessPopularThan: lessPopularThanPercent(combo) });
-  }
-  return picked;
+  return generate({ mode: 'unpopular', count }, rng).sets;
 }

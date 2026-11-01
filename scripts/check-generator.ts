@@ -1,6 +1,6 @@
 // Sanity checks for src/lib/lotto/generator.ts:  npm run check:generator
 import assert from 'node:assert/strict';
-import { generateUnpopular, patternFlags, randomCombo, lessPopularThanPercent } from '../src/lib/lotto/generator';
+import { generate, generateUnpopular, patternFlags, randomCombo, lessPopularThanPercent } from '../src/lib/lotto/generator';
 
 assert.deepEqual(patternFlags([1, 2, 3, 20, 33, 44]), ['run3']);
 assert.ok(patternFlags([5, 10, 15, 20, 25, 44]).includes('arithmetic5'));
@@ -27,4 +27,27 @@ for (const s of sets) {
 }
 const typical = Array.from({ length: 2000 }, () => lessPopularThanPercent(randomCombo()));
 console.log(`random combo median percentile: ${typical.sort((a, b) => a - b)[1000]}% (should be ~50)`);
+
+// Conditions
+const sum = (c: readonly number[]) => c.reduce((a, b) => a + b, 0);
+for (const mode of ['unpopular', 'random'] as const) {
+  const r = generate({ mode, count: 10, fixed: [7, 21], excluded: [1, 2, 3, 44, 45], oddCount: 3, sumRange: [100, 175] });
+  assert.equal(r.error, undefined);
+  assert.equal(r.sets.length, 10);
+  assert.equal(new Set(r.sets.map((s) => s.numbers.join(','))).size, 10);
+  for (const s of r.sets) {
+    assert.ok(s.numbers.includes(7) && s.numbers.includes(21));
+    assert.ok(![1, 2, 3, 44, 45].some((n) => s.numbers.includes(n)));
+    assert.equal(s.numbers.filter((n) => n % 2 === 1).length, 3);
+    assert.ok(sum(s.numbers) >= 100 && sum(s.numbers) <= 175);
+  }
+}
+assert.equal(generate({ mode: 'random', count: 1, fixed: [1, 2, 3, 4, 5, 6] }).error, 'tooManyFixed');
+assert.equal(generate({ mode: 'random', count: 1, excluded: Array.from({ length: 40 }, (_, i) => i + 1) }).error, 'notEnoughNumbers');
+assert.equal(generate({ mode: 'random', count: 1, fixed: [1, 3, 5], oddCount: 2 }).error, 'oddEvenImpossible');
+assert.equal(generate({ mode: 'random', count: 1, fixed: [1, 2, 3, 4, 5], sumRange: [200, 255] }).error, 'noMatch');
+// Only 2 possible combos (5 fixed, 2 free numbers): returns what exists.
+const few = generate({ mode: 'unpopular', count: 5, fixed: [1, 2, 3, 4, 5], excluded: Array.from({ length: 38 }, (_, i) => i + 8) });
+assert.equal(few.sets.length, 2);
+assert.equal(few.patternsRelaxed, true);
 console.log('ok');

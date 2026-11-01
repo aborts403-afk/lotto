@@ -44,6 +44,7 @@
   .venv/bin/python analysis/popularity.py
   ```
 - `src/lib/lotto/generator.ts`: 사람들이 일부러 고르는 모양(연속 3개, 등차 5개, 용지 한 줄 4개, 모두 31 이하, 같은 끝자리 3개)을 빼고, 인기도 하위 10% 후보 중에서 무작위로 뽑습니다.
+- `generate()` 옵션: 모드(남들이 안 고르는 번호 / 완전 무작위), 세트 수, 고정수(최대 5개), 제외수, 홀수 개수, 합계 범위. 조건이 불가능하면 `error`를 돌려주고, 고정수 때문에 흔한 모양을 피할 수 없으면 `patternsRelaxed`로 알려 줍니다.
 - `npm run check:generator`: 생성기 점검
 
 ## 회차별 페이지와 자동 배포
