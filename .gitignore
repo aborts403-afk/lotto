@@ -47,3 +47,5 @@ example
 .dev.vars*
 !.dev.vars.example
 !.env.example
+worker/backfill.sql
+.wrangler/

@@ -1,14 +1,32 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "lotto-note",
+  "main": "worker/src/index.ts",
   "compatibility_date": "2026-10-23",
   "observability": {
     "enabled": true
   },
+  // Expo web build. Only /api/* runs the Worker script; everything else is served straight from assets.
   "assets": {
-    "directory": "dist"
+    "directory": "dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
   },
   "routes": [
     { "pattern": "lotto.q-ova.com", "custom_domain": true }
-  ]
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lotto-db",
+      "database_id": "1f7bb689-2158-4d88-ada5-98f5b0ad5e3f",
+      "migrations_dir": "worker/migrations"
+    }
+  ],
+  // Cron is UTC. Draw is Saturday ~20:35 KST (11:35 UTC).
+  // - Every 15 min, Sat 21:00-23:45 KST (12:00-14:45 UTC)
+  // - Sunday 09:00 KST (00:00 UTC) as a catch-up run
+  "triggers": {
+    "crons": ["*/15 12-14 * * SAT", "0 0 * * SUN"]
+  }
 }

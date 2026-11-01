@@ -1,56 +1,33 @@
-# Welcome to your Expo app 👋
+# 로또 노트
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+로또 당첨번호 조회, 번호 생성, 내 번호 당첨 확인 앱 (Expo: 웹 + 안드로이드).
 
-## Get started
+- 웹: https://lotto.q-ova.com
+- 앱 코드: `src/` (Expo Router)
+- 서버: `worker/` (Cloudflare Worker + D1). 정적 웹 빌드를 서빙하고 `/api/*`를 처리합니다.
 
-1. Install dependencies
+## API
+| 경로 | 설명 |
+|---|---|
+| `GET /api/latest` | 최신 회차 |
+| `GET /api/draws?limit=N` | 회차 목록 (최신순, limit 생략 시 전체) |
+| `GET /api/draws/:round` | 특정 회차 |
+| `GET /api/health` | 수집 상태 (최신 회차가 8일 넘게 지나면 503) |
 
-   ```bash
-   npm install
-   ```
+## 당첨번호 수집
+- 출처: 동행복권 결과 페이지가 쓰는 JSON (`worker/src/dhlottery.ts`). 공식 공개 API가 아니라서 바뀔 수 있습니다.
+- 매주 자동: Worker 크론이 토요일 21:00~23:45 KST에 15분마다, 일요일 09:00 KST에 한 번 더 "마지막 회차 + 1"을 조회해 저장합니다.
+- 최초 1회 전체 수집:
+  ```
+  node scripts/backfill-draws.ts > worker/backfill.sql
+  npx wrangler d1 execute lotto-db --remote --file worker/backfill.sql
+  ```
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+## 명령
 ```
-
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+npm run web            # 개발 서버 (웹)
+npm run deploy:web     # 웹 빌드 + Worker 배포
+npx wrangler d1 migrations apply lotto-db --remote   # DB 스키마 적용
+npx wrangler dev --test-scheduled                    # 로컬에서 크론 테스트: /__scheduled
+npx wrangler types worker/worker-configuration.d.ts  # wrangler.jsonc 변경 후 타입 재생성
+```
