@@ -14,6 +14,9 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    chartSeries: '#2a78d6',
+    chartSeriesStrong: '#1c5cab',
+    chartGrid: '#E0E1E6',
   },
   dark: {
     text: '#ffffff',
@@ -21,6 +24,9 @@ export const Colors = {
     backgroundElement: '#212225',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
+    chartSeries: '#3987e5',
+    chartSeriesStrong: '#86b6ef',
+    chartGrid: '#2E3135',
   },
 } as const;
 

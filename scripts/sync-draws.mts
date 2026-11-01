@@ -45,6 +45,7 @@ const urls = [
   { loc: '/', lastmod: latest.drawDate, priority: '1.0' },
   { loc: '/round', lastmod: latest.drawDate, priority: '0.9' },
   { loc: '/generate', priority: '0.8' },
+  { loc: '/stats', lastmod: latest.drawDate, priority: '0.8' },
   ...draws
     .slice()
     .reverse()

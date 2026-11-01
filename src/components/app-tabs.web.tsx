@@ -28,6 +28,9 @@ export default function AppTabs() {
           <TabTrigger name="generate" href="/generate" asChild>
             <TabButton>번호 생성</TabButton>
           </TabTrigger>
+          <TabTrigger name="stats" href="/stats" asChild>
+            <TabButton>통계</TabButton>
+          </TabTrigger>
         </CustomTabList>
       </TabList>
     </Tabs>
