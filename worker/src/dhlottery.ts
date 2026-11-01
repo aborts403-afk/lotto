@@ -48,6 +48,7 @@ export function parseDraw(raw: RawDraw): Draw {
     numbers: numbers as Draw['numbers'],
     bonus,
     ranks: [1, 2, 3, 4, 5].map((r) => ({ winners: num(raw, `rnk${r}WnNope`), prize: num(raw, `rnk${r}WnAmt`) })),
-    totalSales: num(raw, 'rlvtEpsdSumNtslAmt'),
+    // wholEpsdSumNtslAmt = ticket sales. (rlvtEpsdSumNtslAmt is the prize pool, ~50% of sales in recent rounds.)
+    totalSales: num(raw, 'wholEpsdSumNtslAmt'),
   };
 }

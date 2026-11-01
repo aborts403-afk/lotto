@@ -1,7 +1,7 @@
 // One-time backfill: fetch every past draw and write SQL for D1.
 //   node scripts/backfill-draws.ts > worker/backfill.sql
 //   npx wrangler d1 execute lotto-db --remote --file worker/backfill.sql
-// Weekly updates after this are done by the Worker cron.
+// Weekly updates after this are done by the Worker cron. Re-running overwrites existing rows (INSERT OR REPLACE).
 import { fetchAround, type Draw } from '../worker/src/dhlottery.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -27,6 +27,6 @@ for (const r of rounds) {
   const d = draws.get(r)!;
   const values = [d.round, d.drawDate, ...d.numbers, d.bonus, ...d.ranks.flatMap((x) => [x.winners, x.prize]), d.totalSales];
   console.log(
-    `INSERT OR IGNORE INTO draws (round, draw_date, n1, n2, n3, n4, n5, n6, bonus, rank1_winners, rank1_prize, rank2_winners, rank2_prize, rank3_winners, rank3_prize, rank4_winners, rank4_prize, rank5_winners, rank5_prize, total_sales) VALUES (${values.map(q).join(', ')});`,
+    `INSERT OR REPLACE INTO draws (round, draw_date, n1, n2, n3, n4, n5, n6, bonus, rank1_winners, rank1_prize, rank2_winners, rank2_prize, rank3_winners, rank3_prize, rank4_winners, rank4_prize, rank5_winners, rank5_prize, total_sales) VALUES (${values.map(q).join(', ')});`,
   );
 }

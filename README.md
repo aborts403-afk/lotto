@@ -23,6 +23,16 @@
   npx wrangler d1 execute lotto-db --remote --file worker/backfill.sql
   ```
 
+## 번호 생성기 (남들이 안 고르는 번호)
+- 당첨 확률은 모든 조합이 같고, 다른 사람과 겹칠 가능성(1등 상금을 나눌 사람 수)만 다릅니다.
+- `analysis/popularity.py`: 역대 3등 당첨자 수로 번호별 인기도를 추정해 `src/lib/lotto/popularity-weights.ts`를 생성합니다. 홀수 회차로 검증(학습에 안 쓴 회차)한 결과도 출력합니다.
+  ```
+  python3 -m venv .venv && .venv/bin/pip install -r analysis/requirements.txt
+  .venv/bin/python analysis/popularity.py
+  ```
+- `src/lib/lotto/generator.ts`: 사람들이 일부러 고르는 모양(연속 3개, 등차 5개, 용지 한 줄 4개, 모두 31 이하, 같은 끝자리 3개)을 빼고, 인기도 하위 10% 후보 중에서 무작위로 뽑습니다.
+- `npm run check:generator`: 생성기 점검
+
 ## 명령
 ```
 npm run web            # 개발 서버 (웹)

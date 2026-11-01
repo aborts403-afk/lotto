@@ -49,3 +49,4 @@ example
 !.env.example
 worker/backfill.sql
 .wrangler/
+.venv/
