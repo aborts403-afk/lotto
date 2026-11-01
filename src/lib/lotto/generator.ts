@@ -82,11 +82,25 @@ export function randomCombo(rng: () => number = Math.random): Combo {
   return pool.slice(0, 6).sort((a, b) => a - b);
 }
 
+// Small seeded PRNG (mulberry32) so the reference sample is identical on every run.
+function seededRng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // Score distribution of uniformly random combinations, for turning a score into a percentile.
+// Deterministic, so a percentile rendered into static HTML matches the one computed in the browser.
 let referenceScores: number[] | null = null;
 function getReferenceScores(): number[] {
   if (!referenceScores) {
-    referenceScores = Array.from({ length: 20000 }, () => popularityScore(randomCombo())).sort((a, b) => a - b);
+    const rng = seededRng(645);
+    referenceScores = Array.from({ length: 20000 }, () => popularityScore(randomCombo(rng))).sort((a, b) => a - b);
   }
   return referenceScores;
 }

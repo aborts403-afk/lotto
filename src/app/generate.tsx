@@ -1,20 +1,32 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Metadata } from 'expo-router/server';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { LottoBalls } from '@/components/lotto-ball';
 import { ThemedText } from '@/components/themed-text';
+import { Page } from '@/components/page';
 import { ThemedView } from '@/components/themed-view';
 import { Collapsible } from '@/components/ui/collapsible';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { generateUnpopular, type GeneratedCombo } from '@/lib/lotto/generator';
 import { FITTED_THROUGH_ROUND } from '@/lib/lotto/popularity-weights';
+import { SITE_NAME, SITE_URL } from '@/lib/site';
 
 const LABELS = ['A', 'B', 'C', 'D', 'E'];
 
+export function generateMetadata(): Metadata {
+  const title = `남들이 안 고르는 로또 번호 생성기 | ${SITE_NAME}`;
+  const description = '당첨 확률은 같지만 1등 상금을 나눌 사람이 적은 번호. 역대 당첨자 수 데이터로 인기 없는 조합을 골라 드려요.';
+  return {
+    title,
+    description,
+    alternates: { canonical: `${SITE_URL}/generate` },
+    openGraph: { title, description, url: `${SITE_URL}/generate`, siteName: SITE_NAME, type: 'website' },
+  };
+}
+
 export default function GenerateScreen() {
-  const insets = useSafeAreaInsets();
   const hydrated = useHydrated();
   // Random picks must not be part of the static web render, so the first set is made after hydration.
   const initial = useMemo(() => (hydrated ? generateUnpopular(5) : null), [hydrated]);
@@ -22,13 +34,7 @@ export default function GenerateScreen() {
   const sets = regenerated ?? initial;
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + Spacing.six, paddingBottom: insets.bottom + BottomTabInset + Spacing.four },
-        ]}>
-        <View style={styles.inner}>
+    <Page>
           <View style={styles.header}>
             <ThemedText type="subtitle">번호 생성</ThemedText>
             <ThemedText themeColor="textSecondary">남들이 잘 고르지 않는 번호 조합</ThemedText>
@@ -86,16 +92,11 @@ export default function GenerateScreen() {
               </ThemedText>
             </View>
           </Collapsible>
-        </View>
-      </ScrollView>
-    </ThemedView>
+    </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { alignItems: 'center', paddingHorizontal: Spacing.four },
-  inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.four },
   header: { gap: Spacing.one },
   notice: { padding: Spacing.three, borderRadius: Spacing.three },
   sets: { gap: Spacing.two },

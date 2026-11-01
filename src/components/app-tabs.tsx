@@ -20,6 +20,14 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="round">
+        <NativeTabs.Trigger.Label>회차</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={require('@/assets/images/tabIcons/explore.png')}
+          renderingMode="template"
+        />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="generate">
         <NativeTabs.Trigger.Label>번호 생성</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

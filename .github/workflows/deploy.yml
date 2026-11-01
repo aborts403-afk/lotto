@@ -1,0 +1,36 @@
+# Build the web app (with the latest draws from /api/draws) and deploy the Worker.
+# Runs on push to main, after each Saturday draw (so new /round/N pages appear), and manually.
+# Requires repo secrets CLOUDFLARE_API_TOKEN ("Edit Cloudflare Workers" template + D1 edit) and CLOUDFLARE_ACCOUNT_ID.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # UTC. The Worker cron collects results Sat 20:45-23:45 KST; rebuild after it.
+    - cron: '40 12 * * 6'  # Sat 21:40 KST
+    - cron: '55 14 * * 6'  # Sat 23:55 KST
+    - cron: '30 0 * * 0'   # Sun 09:30 KST
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build:web
+      - run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

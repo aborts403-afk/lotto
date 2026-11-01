@@ -1,9 +1,17 @@
+import type { Metadata } from 'expo-router/server';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { SITE_NAME, SITE_URL } from '@/lib/site';
+
+export function generateMetadata(): Metadata {
+  const title = `${SITE_NAME} - 로또 당첨번호 조회와 남들이 안 고르는 번호`;
+  const description = '로또 6/45 최신 당첨번호, 회차별 결과, 1등 당첨금, 그리고 1등 상금을 나눌 사람이 적은 번호 생성기.';
+  return { title, description, alternates: { canonical: `${SITE_URL}/` }, openGraph: { title, description, url: `${SITE_URL}/`, siteName: SITE_NAME, type: 'website' } };
+}
 
 export default function HomeScreen() {
   return (

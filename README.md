@@ -33,6 +33,11 @@
 - `src/lib/lotto/generator.ts`: 사람들이 일부러 고르는 모양(연속 3개, 등차 5개, 용지 한 줄 4개, 모두 31 이하, 같은 끝자리 3개)을 빼고, 인기도 하위 10% 후보 중에서 무작위로 뽑습니다.
 - `npm run check:generator`: 생성기 점검
 
+## 회차별 페이지와 자동 배포
+- `/round`, `/round/:round`: 빌드할 때 `scripts/sync-draws.mts`가 `/api/draws`를 받아 `src/data/draws.json`, `public/sitemap.xml`, `public/robots.txt`를 만들고, 회차마다 정적 HTML을 생성합니다 (검색 노출용).
+- `.github/workflows/deploy.yml`: main 푸시, 매주 토요일 추첨 후(21:40, 23:55 KST)와 일요일 09:30 KST에 다시 빌드하고 배포합니다. 그래서 새 회차 페이지가 자동으로 생깁니다.
+  - 필요한 GitHub 시크릿: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
+
 ## 명령
 ```
 npm run web            # 개발 서버 (웹)

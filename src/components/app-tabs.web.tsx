@@ -22,6 +22,9 @@ export default function AppTabs() {
           <TabTrigger name="home" href="/" asChild>
             <TabButton>홈</TabButton>
           </TabTrigger>
+          <TabTrigger name="round" href="/round" asChild>
+            <TabButton>회차</TabButton>
+          </TabTrigger>
           <TabTrigger name="generate" href="/generate" asChild>
             <TabButton>번호 생성</TabButton>
           </TabTrigger>

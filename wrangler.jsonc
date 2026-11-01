@@ -10,7 +10,9 @@
   "assets": {
     "directory": "dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*"],
+    // Serve /round from round/index.html without redirecting to /round/ (matches canonical URLs).
+    "html_handling": "drop-trailing-slash"
   },
   "routes": [
     { "pattern": "lotto.q-ova.com", "custom_domain": true }
