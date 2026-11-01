@@ -16,7 +16,7 @@
 
 ## 당첨번호 수집
 - 출처: 동행복권 결과 페이지가 쓰는 JSON (`worker/src/dhlottery.ts`). 공식 공개 API가 아니라서 바뀔 수 있습니다.
-- 매주 자동: Worker 크론이 토요일 21:00~23:45 KST에 15분마다, 일요일 09:00 KST에 한 번 더 "마지막 회차 + 1"을 조회해 저장합니다.
+- 매주 자동: Worker 크론이 "마지막 회차 + 1"을 조회해 저장합니다. 토요일 20:45~21:25 KST 5분마다, 21:30~23:45 KST 15분마다, 일요일 09:00 KST 한 번.
 - 최초 1회 전체 수집:
   ```
   node scripts/backfill-draws.ts > worker/backfill.sql

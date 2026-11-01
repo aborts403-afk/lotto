@@ -23,10 +23,16 @@
       "migrations_dir": "worker/migrations"
     }
   ],
-  // Cron is UTC. Draw is Saturday ~20:35 KST (11:35 UTC).
-  // - Every 15 min, Sat 21:00-23:45 KST (12:00-14:45 UTC)
-  // - Sunday 09:00 KST (00:00 UTC) as a catch-up run
+  // Cron is UTC (KST = UTC+9). Draw is Saturday ~20:35 KST (11:35 UTC).
+  // - Sat 20:45-21:25 KST every 5 min  (11:45-12:25 UTC): results are expected here
+  // - Sat 21:30-23:45 KST every 15 min (12:30-14:45 UTC)
+  // - Sun 09:00 KST (00:00 UTC) as a catch-up run
   "triggers": {
-    "crons": ["*/15 12-14 * * SAT", "0 0 * * SUN"]
+    "crons": [
+      "45-55/5 11 * * SAT",
+      "0-25/5,30,45 12 * * SAT",
+      "*/15 13-14 * * SAT",
+      "0 0 * * SUN"
+    ]
   }
 }
