@@ -11,7 +11,6 @@ import { LottoBall, LottoBalls } from '@/components/lotto-ball';
 import { PendingRoundText, usePendingRound } from '@/components/next-draw';
 import { NumberPicker } from '@/components/number-picker';
 import { Page } from '@/components/page';
-import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
 import { RANK_COLORS } from '@/components/ticket-result';
 import { Radius, Spacing } from '@/constants/theme';
@@ -20,7 +19,7 @@ import { useDrawLookup, useLatestDraw } from '@/hooks/use-latest-draw';
 import { addTickets, removeTickets, restoreTickets, useMyTickets, type MyTicket } from '@/hooks/use-my-tickets';
 import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
-import { formatCount, formatDateDots, formatKRW } from '@/lib/format';
+import { formatCount, formatDateDots, formatKRW, formatKRWShort } from '@/lib/format';
 import { checkTicket, parseNumbers, RANK_RULES, type CheckResult } from '@/lib/lotto/check';
 import type { Draw } from '@/lib/lotto/draws';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
@@ -241,25 +240,31 @@ function CheckTab({
 
 type Group = { round: number; draw?: Draw; tickets: MyTicket[] };
 
+function RankPill({ result }: { result: CheckResult }) {
+  const theme = useTheme();
+  const color = result.rank ? RANK_COLORS[result.rank] : theme.textTertiary;
+  return (
+    <View style={[styles.rankPill, { backgroundColor: result.rank ? `${color}1A` : theme.backgroundSelected }]}>
+      <ThemedText type="caption" style={[styles.rankText, { color }]}>
+        {result.rank ? `${result.rank}등 ${formatKRW(result.prize)}` : '낙첨'}
+      </ThemedText>
+    </View>
+  );
+}
+
 function TicketLine({ ticket, draw, onRemove, last }: { ticket: MyTicket; draw?: Draw; onRemove: () => void; last: boolean }) {
   const theme = useTheme();
   const r = draw ? checkTicket(ticket.numbers, draw) : null;
   return (
     <View style={[styles.ticket, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}>
-      <View style={styles.flex}>
+      <View style={styles.ticketBody}>
         <LottoBalls
           numbers={ticket.numbers}
           size={32}
           highlight={r ? r.matched : undefined}
           ring={r?.bonusMatched && draw ? [draw.bonus] : undefined}
         />
-        {r && (
-          <ThemedText
-            type="caption"
-            style={{ color: r.rank ? RANK_COLORS[r.rank] : theme.textTertiary, fontWeight: r.rank ? '700' : '500' }}>
-            {r.rank ? `${r.rank}등 · ${formatKRW(r.prize)}` : `낙첨 · ${r.matched.length}개 일치`}
-          </ThemedText>
-        )}
+        {r && <RankPill result={r} />}
       </View>
       <Pressable
         accessibilityRole="button"
@@ -267,54 +272,85 @@ function TicketLine({ ticket, draw, onRemove, last }: { ticket: MyTicket; draw?:
         onPress={onRemove}
         hitSlop={10}
         style={({ pressed }) => pressed && styles.pressed}>
-        <Icon name="close" size={18} color={theme.textTertiary} />
+        <Icon name="close" size={16} color={theme.textTertiary} />
       </Pressable>
     </View>
   );
 }
 
-function PendingPill({ round }: { round: number }) {
+const WEEK = 7 * 86_400_000;
+
+// A round still waiting for its draw: status pill, a bar filling up over the week, countdown text.
+function PendingHeader({ round, count }: { round: number; count: number }) {
   const theme = useTheme();
-  const { phase } = usePendingRound(round);
-  return phase === 'before' ? (
-    <Pill label="추첨 전" color={theme.primary} soft />
-  ) : (
-    <Pill label="결과 확인 중" color={theme.warning} soft />
+  const { phase, msToDraw } = usePendingRound(round);
+  const progress = phase === 'before' ? Math.min(1, Math.max(0.03, 1 - msToDraw / WEEK)) : 1;
+  return (
+    <>
+      <View style={styles.between}>
+        <ThemedText type="heading">{round}회</ThemedText>
+        {phase === 'before' ? (
+          <Pill label={`추첨 전 · ${count}장`} color={theme.primary} soft />
+        ) : (
+          <Pill label={`결과 확인 중 · ${count}장`} color={theme.warning} soft />
+        )}
+      </View>
+      <View style={[styles.progressTrack, { backgroundColor: theme.backgroundSelected }]}>
+        <View
+          style={[
+            styles.progressBar,
+            { width: `${progress * 100}%`, backgroundColor: phase === 'before' ? theme.primary : theme.warning },
+          ]}
+        />
+      </View>
+      <PendingRoundText round={round} />
+    </>
+  );
+}
+
+function DrawnHeader({ group }: { group: Group & { draw: Draw } }) {
+  const theme = useTheme();
+  const { round, draw, tickets } = group;
+  const won = tickets.map((t) => checkTicket(t.numbers, draw)).filter((r) => r.rank);
+  const prize = won.reduce((sum, r) => sum + r.prize, 0);
+  return (
+    <>
+      <View style={styles.between}>
+        <Pressable accessibilityRole="link" onPress={() => router.push(`/round/${round}`)} style={styles.groupTitle}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            {round}회 결과
+          </ThemedText>
+          <Icon name="chevronRight" size={14} color={theme.textTertiary} />
+        </Pressable>
+        {won.length ? (
+          <Pill label={`${tickets.length}장 중 ${won.length}장 당첨`} color={theme.success} soft />
+        ) : (
+          <Pill label={`${tickets.length}장 · 당첨 없음`} color={theme.textTertiary} soft />
+        )}
+      </View>
+      {won.length > 0 && (
+        <View style={styles.amountBlock}>
+          <ThemedText style={[styles.amount, { color: theme.primary }]}>{formatKRW(prize)}</ThemedText>
+          <ThemedText type="caption" themeColor="textTertiary">
+            세금 떼기 전 금액이에요
+          </ThemedText>
+        </View>
+      )}
+      <View style={[styles.groupDraw, { backgroundColor: theme.backgroundSelected }]}>
+        <ThemedText type="caption" themeColor="textTertiary">
+          당첨번호
+        </ThemedText>
+        <DrawNumbers numbers={draw.numbers} bonus={draw.bonus} size={22} />
+      </View>
+    </>
   );
 }
 
 function RoundGroup({ group, onRemove }: { group: Group; onRemove: (t: MyTicket[]) => void }) {
-  const theme = useTheme();
   const { round, draw, tickets } = group;
-  const won = draw ? tickets.map((t) => checkTicket(t.numbers, draw)).filter((r) => r.rank) : [];
-  const prize = won.reduce((sum, r) => sum + r.prize, 0);
-  const best = won.length ? Math.min(...won.map((r) => r.rank!)) : null;
-
   return (
     <Card style={styles.group}>
-      <View style={styles.between}>
-        <Pressable onPress={draw ? () => router.push(`/round/${round}`) : undefined} disabled={!draw} style={styles.groupTitle}>
-          <ThemedText type="heading">{round}회</ThemedText>
-          {draw && <Icon name="chevronRight" size={16} color={theme.textTertiary} />}
-        </Pressable>
-        {!draw ? (
-          <PendingPill round={round} />
-        ) : best ? (
-          <Pill label={`${won.length}장 당첨 · ${formatKRW(prize)}`} color={RANK_COLORS[best as 1]} soft />
-        ) : (
-          <Pill label="당첨 없음" color={theme.textTertiary} soft />
-        )}
-      </View>
-      {draw ? (
-        <View style={[styles.groupDraw, { backgroundColor: theme.backgroundSelected }]}>
-          <ThemedText type="caption" themeColor="textTertiary">
-            당첨번호
-          </ThemedText>
-          <DrawNumbers numbers={draw.numbers} bonus={draw.bonus} size={24} />
-        </View>
-      ) : (
-        <PendingRoundText round={round} />
-      )}
+      {draw ? <DrawnHeader group={{ ...group, draw }} /> : <PendingHeader round={round} count={tickets.length} />}
       <View>
         {tickets.map((t, i) => (
           <TicketLine key={t.id} ticket={t} draw={draw} onRemove={() => onRemove([t])} last={i === tickets.length - 1} />
@@ -332,44 +368,29 @@ function RoundGroup({ group, onRemove }: { group: Group; onRemove: (t: MyTicket[
   );
 }
 
-function SavedTab({ onCheck }: { onCheck: () => void }) {
-  const theme = useTheme();
+function useGroups(): Group[] {
   const { tickets } = useMyTickets();
   const lookup = useDrawLookup();
-  const [undo, setUndo] = useState<MyTicket[] | null>(null);
-
-  const groups = useMemo(() => {
+  return useMemo(() => {
     const map = new Map<number, MyTicket[]>();
     for (const t of tickets) map.set(t.round, [...(map.get(t.round) ?? []), t]);
     return [...map.entries()]
       .sort((a, b) => b[0] - a[0])
       .map(([round, list]): Group => ({ round, draw: lookup(round), tickets: list }));
   }, [tickets, lookup]);
+}
 
-  const totals = useMemo(() => {
-    let checked = 0;
-    let won = 0;
-    let prize = 0;
-    for (const g of groups) {
-      if (!g.draw) continue;
-      for (const t of g.tickets) {
-        const r = checkTicket(t.numbers, g.draw);
-        checked++;
-        if (r.rank) {
-          won++;
-          prize += r.prize;
-        }
-      }
-    }
-    return { checked, won, prize, waiting: tickets.length - checked };
-  }, [groups, tickets.length]);
+function SavedTab({ onCheck }: { onCheck: () => void }) {
+  const theme = useTheme();
+  const groups = useGroups();
+  const [undo, setUndo] = useState<MyTicket[] | null>(null);
 
   const remove = async (list: MyTicket[]) => {
     await removeTickets(list.map((t) => t.id));
     setUndo(list);
   };
 
-  if (tickets.length === 0) {
+  if (groups.length === 0) {
     return (
       <Card style={styles.emptyCard}>
         <View style={[styles.emptyIcon, { backgroundColor: theme.primarySoft }]}>
@@ -391,36 +412,6 @@ function SavedTab({ onCheck }: { onCheck: () => void }) {
 
   return (
     <>
-      <Card style={styles.summary}>
-        <View style={styles.summaryItem}>
-          <ThemedText type="caption" themeColor="textTertiary">
-            저장
-          </ThemedText>
-          <ThemedText type="heading">{formatCount(tickets.length)}장</ThemedText>
-        </View>
-        <View style={[styles.divider, { backgroundColor: theme.border }]} />
-        <View style={styles.summaryItem}>
-          <ThemedText type="caption" themeColor="textTertiary">
-            당첨
-          </ThemedText>
-          <ThemedText type="heading">
-            {formatCount(totals.won)}
-            <ThemedText type="small" themeColor="textTertiary">
-              /{formatCount(totals.checked)}장
-            </ThemedText>
-          </ThemedText>
-        </View>
-        <View style={[styles.divider, { backgroundColor: theme.border }]} />
-        <View style={styles.summaryItem}>
-          <ThemedText type="caption" themeColor="textTertiary">
-            당첨금
-          </ThemedText>
-          <ThemedText type="heading" style={totals.prize ? { color: theme.primary } : undefined}>
-            {totals.prize ? formatKRW(totals.prize) : '0원'}
-          </ThemedText>
-        </View>
-      </Card>
-
       {undo && (
         <View style={[styles.undo, { backgroundColor: theme.text }]}>
           <ThemedText type="small" style={{ color: theme.background }}>
@@ -444,38 +435,64 @@ function SavedTab({ onCheck }: { onCheck: () => void }) {
       ))}
 
       <ThemedText type="caption" themeColor="textTertiary" style={styles.center}>
-        번호는 이 기기에만 저장돼요. 당첨금은 세금 떼기 전 금액이에요.
+        번호는 이 기기에만 저장돼요.
       </ThemedText>
     </>
   );
+}
+
+// "저장 7장 · 누적 당첨 5,317만원" for the header.
+function useTotalsLine(): string | null {
+  const groups = useGroups();
+  return useMemo(() => {
+    let count = 0;
+    let prize = 0;
+    for (const g of groups) {
+      count += g.tickets.length;
+      if (g.draw) for (const t of g.tickets) prize += checkTicket(t.numbers, g.draw).prize;
+    }
+    if (!count) return null;
+    return `저장 ${formatCount(count)}장${prize ? ` · 누적 당첨 ${formatKRWShort(prize)}` : ''}`;
+  }, [groups]);
 }
 
 export default function MyScreen() {
   const hydrated = useHydrated();
   const params = useLocalSearchParams<{ round?: string; numbers?: string }>();
   const { tickets, loaded } = useMyTickets();
+  const totals = useTotalsLine();
   const [toast, setToast] = useToast();
   const initialRound = params.round ? Number(params.round) : null;
   const initialNumbers = params.numbers ? parseNumbers(params.numbers) : [];
   const [tab, setTab] = useState<Tab | null>(null);
   // Links with a round or numbers open the checker; otherwise show saved tickets when there are any.
-  // The static HTML has no query string, so the default tab is only decided after hydration
-  // (otherwise the server-rendered selection would stick).
+  // The static HTML has no query string, so the default view is only decided after hydration.
   const current: Tab =
     tab ?? (hydrated && (params.round || params.numbers || (loaded && tickets.length === 0)) ? 'check' : 'saved');
+  const ready = hydrated && loaded;
 
   return (
-    <Page title="내 번호" subtitle="당첨 확인하고, 산 번호를 모아 두세요" toast={toast}>
-      <Segmented
-        options={[
-          { value: 'saved', label: loaded && tickets.length ? `저장한 번호 ${tickets.length}` : '저장한 번호' },
-          { value: 'check', label: '당첨 확인' },
-        ]}
-        value={current}
-        onChange={setTab}
-      />
+    <Page
+      title={current === 'check' ? '당첨 확인' : '내 번호'}
+      subtitle={
+        current === 'check'
+          ? '산 번호를 넣으면 몇 등인지 바로 보여요'
+          : (ready && totals) || '산 번호를 모아 두면 결과를 자동으로 확인해요'
+      }
+      toast={toast}
+      right={
+        ready ? (
+          current === 'check' ? (
+            tickets.length > 0 ? (
+              <Button label="저장한 번호" size="sm" variant="tonal" onPress={() => setTab('saved')} />
+            ) : null
+          ) : (
+            <Button label="번호 입력" icon="plus" size="sm" variant="primary" onPress={() => setTab('check')} />
+          )
+        ) : null
+      }>
       {/* Saved tickets and the latest draw depend on the device, so the content renders after hydration on web. */}
-      {!hydrated || !loaded ? (
+      {!ready ? (
         <Card style={styles.loading}>
           <ThemedText type="small" themeColor="textTertiary">
             불러오는 중…
@@ -509,7 +526,14 @@ const styles = StyleSheet.create({
   group: { gap: 12 },
   groupTitle: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   groupDraw: { borderRadius: Radius.md, padding: 12, gap: 6 },
-  ticket: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 12 },
+  ticket: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 10 },
+  ticketBody: { flex: 1, gap: 6 },
+  rankPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignSelf: 'flex-start' },
+  rankText: { fontWeight: '800' },
+  amountBlock: { gap: 2 },
+  amount: { fontSize: 30, lineHeight: 38, fontWeight: '900', letterSpacing: -1 },
+  progressTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  progressBar: { height: 8, borderRadius: 4 },
   summary: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.three },
   summaryItem: { flex: 1, alignItems: 'center', gap: 2 },
   divider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },

@@ -24,3 +24,10 @@ export function formatDateDots(ymd: string): string {
 export function formatCount(n: number): string {
   return n.toLocaleString('ko-KR');
 }
+
+// Short form for tight spaces (summary tiles): 1,988,320,000 -> "19.9억원"; under 1억 same as formatKRW.
+export function formatKRWShort(won: number): string {
+  if (won < 100_000_000) return formatKRW(won);
+  const eok = Math.floor(won / 10_000_000) / 10; // one decimal, rounded down so it never overstates
+  return `${eok.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}억원`;
+}

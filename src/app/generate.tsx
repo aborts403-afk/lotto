@@ -5,9 +5,8 @@ import { useMemo, useState } from 'react';
 import { Platform, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Card, Notice, Section } from '@/components/card';
-import { Chips } from '@/components/chips';
-import { Icon } from '@/components/icon';
+import { Card, Notice, Pill, Section } from '@/components/card';
+import { Icon, type IconName } from '@/components/icon';
 import { LottoBalls } from '@/components/lotto-ball';
 import { NumberPicker } from '@/components/number-picker';
 import { Page } from '@/components/page';
@@ -33,6 +32,8 @@ import {
   type GenerateMode,
 } from '@/lib/lotto/generator';
 import { FITTED_THROUGH_ROUND } from '@/lib/lotto/popularity-weights';
+import { formatKRWShort } from '@/lib/format';
+import { estimatePayout } from '@/lib/lotto/payout';
 import { coldWeights, HOT_WINDOW, hotWeights, numberStats, topBy } from '@/lib/lotto/stats';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
 
@@ -40,15 +41,129 @@ const LABELS = 'ABCDEFGHIJ';
 const SUM_RANGE = [100, 175] as const; // 79% of all combinations fall in this range
 const POOL_MAX = 20;
 
-const MODES: { value: GenerateMode; label: string; title: string }[] = [
-  { value: 'unpopular', label: '안 겹치는 번호', title: '남들이 안 고르는 번호' },
-  { value: 'random', label: '완전 무작위', title: '완전 무작위' },
-  { value: 'balanced', label: '당첨번호 닮은꼴', title: '당첨번호 닮은꼴' },
-  { value: 'hot', label: '많이 나온 번호', title: '많이 나온 번호 위주' },
-  { value: 'cold', label: '안 나온 번호', title: '오래 안 나온 번호 위주' },
-  { value: 'wheel', label: '내 후보로 조합', title: '내 후보 번호로 조합' },
-  { value: 'phrase', label: '문구로 뽑기', title: '문구로 뽑기' },
+const MODES: { value: GenerateMode; label: string; title: string; desc: string; icon: IconName; color: string }[] = [
+  {
+    value: 'unpopular',
+    label: '안 겹치는 번호',
+    title: '상금 지키는 번호',
+    desc: '1등 상금을 나눌 사람이 적게',
+    icon: 'person',
+    color: '#3182F6',
+  },
+  { value: 'random', label: '완전 무작위', title: '완전 무작위', desc: '자동 구매와 같은 방식', icon: 'dice', color: '#F04452' },
+  {
+    value: 'balanced',
+    label: '당첨번호 닮은꼴',
+    title: '당첨번호 닮은꼴',
+    desc: '역대 당첨번호에 흔한 모양',
+    icon: 'shapes',
+    color: '#03A65F',
+  },
+  {
+    value: 'hot',
+    label: '많이 나온 번호',
+    title: '많이 나온 번호 위주',
+    desc: '최근 100회 자주 나온 번호',
+    icon: 'flame',
+    color: '#E8590C',
+  },
+  {
+    value: 'cold',
+    label: '안 나온 번호',
+    title: '오래 안 나온 번호 위주',
+    desc: '한동안 안 나온 번호',
+    icon: 'snow',
+    color: '#1098AD',
+  },
+  {
+    value: 'wheel',
+    label: '내 후보로 조합',
+    title: '내 후보 번호로 조합',
+    desc: '고른 번호로만 세트 만들기',
+    icon: 'grid',
+    color: '#7048E8',
+  },
+  {
+    value: 'phrase',
+    label: '문구로 뽑기',
+    title: '문구로 뽑기',
+    desc: '이름·생일로 이번 주 번호',
+    icon: 'text',
+    color: '#E88A00',
+  },
 ];
+
+const FUN_COLUMNS = 3;
+
+// The main mode ("상금 지키는 번호") as a large card, the others grouped under "재미로 뽑기".
+function ModePicker({ value, onChange }: { value: GenerateMode; onChange: (m: GenerateMode) => void }) {
+  const theme = useTheme();
+  const [main, ...fun] = MODES;
+  const mainSelected = value === main.value;
+  const rows: (typeof fun)[] = [];
+  for (let i = 0; i < fun.length; i += FUN_COLUMNS) rows.push(fun.slice(i, i + FUN_COLUMNS));
+  return (
+    <View style={styles.block}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected: mainSelected }}
+        onPress={() => onChange(main.value)}
+        style={({ pressed }) => [
+          styles.mainMode,
+          { backgroundColor: theme.backgroundElement, borderColor: mainSelected ? theme.primary : 'transparent' },
+          pressed && styles.pressed,
+        ]}>
+        <View style={[styles.mainIcon, { backgroundColor: theme.primarySoft }]}>
+          <Icon name={main.icon} size={22} color={theme.primary} />
+        </View>
+        <View style={styles.flex}>
+          <View style={styles.titleRow}>
+            <ThemedText style={styles.mainTitle}>{main.title}</ThemedText>
+            <Pill label="추천" color={theme.primary} soft />
+          </View>
+          <ThemedText type="caption" themeColor="textTertiary">
+            1등이 되면 덜 나누도록, 남들이 안 고르는 조합
+          </ThemedText>
+        </View>
+      </Pressable>
+
+      <View style={styles.funHead}>
+        <ThemedText type="heading">재미로 뽑기</ThemedText>
+        <ThemedText type="caption" themeColor="textTertiary">
+          확률은 모두 같아요
+        </ThemedText>
+      </View>
+      <View style={styles.funGrid}>
+        {rows.map((row, i) => (
+          <View key={i} style={styles.funRow}>
+            {row.map((m) => {
+              const selected = m.value === value;
+              return (
+                <Pressable
+                  key={m.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => onChange(m.value)}
+                  style={({ pressed }) => [
+                    styles.funTile,
+                    { backgroundColor: theme.backgroundElement, borderColor: selected ? theme.primary : 'transparent' },
+                    pressed && styles.pressed,
+                  ]}>
+                  <View style={[styles.funIcon, { backgroundColor: `${m.color}1A` }]}>
+                    <Icon name={m.icon} size={16} color={m.color} />
+                  </View>
+                  <ThemedText type="smallBold" numberOfLines={1}>
+                    {m.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 const COUNTS = [
   { value: '1', label: '1세트' },
   { value: '3', label: '3세트' },
@@ -166,7 +281,19 @@ function ConditionChip({ label, onRemove }: { label: string; onRemove: () => voi
   );
 }
 
-function SetRow({ index, numbers, note, last }: { index: number; numbers: readonly number[]; note?: string; last: boolean }) {
+function SetRow({
+  index,
+  numbers,
+  note,
+  payout,
+  last,
+}: {
+  index: number;
+  numbers: readonly number[];
+  note?: string;
+  payout?: string;
+  last: boolean;
+}) {
   const theme = useTheme();
   return (
     <View style={[styles.setRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}>
@@ -177,8 +304,14 @@ function SetRow({ index, numbers, note, last }: { index: number; numbers: readon
       </View>
       <View style={styles.flex}>
         <LottoBalls numbers={numbers} size={34} />
-        {note && (
+        {(note || payout) && (
           <ThemedText type="caption" themeColor="textTertiary">
+            {payout && (
+              <ThemedText type="caption" style={[styles.bold, { color: theme.primary }]}>
+                1등이면 세후 {payout}
+              </ThemedText>
+            )}
+            {payout && note ? ' · ' : ''}
             {note}
           </ThemedText>
         )}
@@ -312,7 +445,7 @@ export default function GenerateScreen() {
   return (
     <Page title="번호 생성" subtitle={`${nextRound}회 추첨용`} toast={toast}>
       <View style={styles.block}>
-        <Chips options={MODES.map((m) => ({ value: m.value, label: m.label }))} value={mode} onChange={setMode} scroll />
+        <ModePicker value={mode} onChange={setMode} />
         <Notice>{description}</Notice>
       </View>
 
@@ -386,7 +519,7 @@ export default function GenerateScreen() {
                 index={i}
                 numbers={s.numbers}
                 last={i === sets.length - 1}
-                note={mode === 'unpopular' ? `무작위 조합의 ${s.lessPopularThan}%보다 덜 고르는 조합` : undefined}
+                payout={mode === 'unpopular' ? `약 ${formatKRWShort(estimatePayout(s.numbers, draws).net)}` : undefined}
               />
             ))}
           </View>
@@ -408,8 +541,8 @@ export default function GenerateScreen() {
           </ThemedText>
         )}
 
-        <View style={styles.actions}>
-          {mode !== 'phrase' && (
+        <View style={styles.row}>
+          {mode !== 'phrase' ? (
             <Button
               label="다시 뽑기"
               icon="refresh"
@@ -417,22 +550,36 @@ export default function GenerateScreen() {
               size="lg"
               onPress={() => setRoll((r) => r + 1)}
               disabled={!!waitingInput}
+              style={styles.grow}
             />
-          )}
-          <View style={styles.row}>
+          ) : (
             <Button
               label={saved ? '저장됨' : '내 번호에 저장'}
               icon={saved ? 'check' : 'bookmark'}
-              variant="tonal"
+              variant="primary"
+              size="lg"
               onPress={saved ? () => router.push('/my') : save}
               disabled={sets.length === 0}
-              style={styles.flex}
+              style={styles.grow}
             />
-            <Button icon="copy" accessibilityLabel="복사" onPress={copy} disabled={sets.length === 0} />
-            {hydrated && canNativeShare() && (
-              <Button icon="share" accessibilityLabel="공유" onPress={share} disabled={sets.length === 0} />
-            )}
-          </View>
+          )}
+          {mode !== 'phrase' && (
+            <Button
+              icon={saved ? 'check' : 'bookmark'}
+              accessibilityLabel={saved ? '저장됨, 내 번호 보기' : '내 번호에 저장'}
+              variant="tonal"
+              size="lg"
+              onPress={saved ? () => router.push('/my') : save}
+              disabled={sets.length === 0}
+            />
+          )}
+          <Button
+            icon={hydrated && canNativeShare() ? 'share' : 'copy'}
+            accessibilityLabel={hydrated && canNativeShare() ? '공유' : '복사'}
+            size="lg"
+            onPress={hydrated && canNativeShare() ? share : copy}
+            disabled={sets.length === 0}
+          />
         </View>
       </Card>
 
@@ -515,6 +662,29 @@ export default function GenerateScreen() {
 
 const styles = StyleSheet.create({
   block: { gap: 12 },
+  grow: { flex: 1 },
+  mainMode: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: Spacing.three,
+    borderRadius: Radius.lg,
+    borderWidth: 2,
+  },
+  mainIcon: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  mainTitle: { fontSize: 17, lineHeight: 24, fontWeight: '900' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  funHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: Spacing.two,
+    paddingHorizontal: 4,
+  },
+  funGrid: { gap: 8 },
+  funRow: { flexDirection: 'row', gap: 8 },
+  funTile: { flex: 1, borderRadius: Radius.md, borderWidth: 2, padding: 12, gap: 8, minHeight: 84 },
+  funIcon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   activeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   condChip: {
     flexDirection: 'row',

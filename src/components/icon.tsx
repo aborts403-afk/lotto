@@ -25,6 +25,13 @@ const ICONS = {
   trash: { ios: 'trash', android: 'delete', web: 'delete' },
   plus: { ios: 'plus', android: 'add', web: 'add' },
   map: { ios: 'map', android: 'map', web: 'map' },
+  diagnose: { ios: 'stethoscope', android: 'troubleshoot', web: 'troubleshoot' },
+  person: { ios: 'person.fill', android: 'person', web: 'person' },
+  flame: { ios: 'flame.fill', android: 'local_fire_department', web: 'local_fire_department' },
+  snow: { ios: 'snowflake', android: 'ac_unit', web: 'ac_unit' },
+  grid: { ios: 'square.grid.3x3.fill', android: 'grid_view', web: 'grid_view' },
+  text: { ios: 'text.quote', android: 'format_quote', web: 'format_quote' },
+  shapes: { ios: 'chart.bar.xaxis', android: 'equalizer', web: 'equalizer' },
 } as const;
 
 export type IconName = keyof typeof ICONS;

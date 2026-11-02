@@ -95,6 +95,8 @@ const urls = [
   { loc: '/round', lastmod: latest.drawDate, priority: '0.9' },
   { loc: '/generate', priority: '0.8' },
   { loc: '/my', priority: '0.8' },
+  { loc: '/diagnose', priority: '0.9' },
+  { loc: '/stats/simulator', priority: '0.8' },
   { loc: '/stats', lastmod: latest.drawDate, priority: '0.8' },
   { loc: '/stats/stores', lastmod: latest.drawDate, priority: '0.7' },
   ...Array.from({ length: 45 }, (_, i) => ({ loc: `/stats/${i + 1}`, lastmod: latest.drawDate, priority: '0.6' })),

@@ -8,13 +8,14 @@ import { ThemedText } from '@/components/themed-text';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useWideWeb, WEB_BOTTOM_BAR, WEB_TOP_BAR } from '@/hooks/use-layout';
 import { useTheme } from '@/hooks/use-theme';
+import { SITE_NAME } from '@/lib/site';
 
-const TABS: { name: string; href: '/' | '/round' | '/generate' | '/my' | '/stats'; label: string; icon: IconName }[] = [
+const TABS: { name: string; href: '/' | '/generate' | '/diagnose' | '/my' | '/stats'; label: string; icon: IconName }[] = [
   { name: 'home', href: '/', label: '홈', icon: 'home' },
-  { name: 'round', href: '/round', label: '회차', icon: 'list' },
-  { name: 'generate', href: '/generate', label: '번호 생성', icon: 'dice' },
+  { name: 'generate', href: '/generate', label: '번호', icon: 'dice' },
+  { name: 'diagnose', href: '/diagnose', label: '진단', icon: 'diagnose' },
   { name: 'my', href: '/my', label: '내 번호', icon: 'ticket' },
-  { name: 'stats', href: '/stats', label: '통계', icon: 'chart' },
+  { name: 'stats', href: '/stats', label: '기록', icon: 'chart' },
 ];
 
 // Phones: bottom tab bar with icons, like the app. Desktop: top bar with the brand.
@@ -107,7 +108,7 @@ function TopBar(props: TabListProps) {
     <View {...props} style={[styles.topBar, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
       <View style={styles.topInner}>
         <Link href="/" style={styles.brand}>
-          <ThemedText type="heading">로또 노트</ThemedText>
+          <ThemedText type="heading">{SITE_NAME}</ThemedText>
         </Link>
         <View style={styles.topTabs}>{props.children}</View>
       </View>

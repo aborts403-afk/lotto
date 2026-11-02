@@ -1,3 +1,4 @@
+import type { Href } from 'expo-router';
 import type { Metadata } from 'expo-router/server';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -6,7 +7,7 @@ import { BarList } from '@/components/bar-list';
 import { Card, ListRow, Notice, Section } from '@/components/card';
 import { Chips } from '@/components/chips';
 import { ColumnChart } from '@/components/column-chart';
-import { Icon } from '@/components/icon';
+import { Icon, type IconName } from '@/components/icon';
 import { LottoBall } from '@/components/lotto-ball';
 import { PressableLink } from '@/components/pressable-link';
 import { Page } from '@/components/page';
@@ -55,11 +56,29 @@ const PERIODS: { value: Period; label: string }[] = [
   { value: '52', label: '최근 1년' },
 ];
 
+const HUB: { href: Href; title: string; desc: string; icon: IconName; color: string }[] = [
+  {
+    href: '/stats/simulator',
+    title: '그때부터 샀다면',
+    desc: '내 번호로 20년 샀다면 얼마를 받았을까',
+    icon: 'refresh',
+    color: '#03A65F',
+  },
+  { href: '/round', title: '회차별 당첨번호', desc: '1회부터 최신 회차까지, 번호로 찾기', icon: 'list', color: '#3182F6' },
+  {
+    href: '/stats/stores',
+    title: '1등 당첨 판매점',
+    desc: '1등이 많이 나온 판매점과 지역별 당첨 수',
+    icon: 'store',
+    color: '#E88A00',
+  },
+];
+
 type Tab = 'numbers' | 'patterns' | 'records';
 const TABS: { value: Tab; label: string }[] = [
   { value: 'numbers', label: '번호' },
   { value: 'patterns', label: '패턴' },
-  { value: 'records', label: '기록' },
+  { value: 'records', label: '1등 기록' },
 ];
 
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
@@ -328,7 +347,32 @@ export default function StatsScreen() {
   const range = `${draws[draws.length - 1].round}~${draws[0].round}회 · ${formatCount(draws.length)}번의 추첨`;
 
   return (
-    <Page title="번호 통계" subtitle={range}>
+    <Page title="기록" subtitle="역대 결과로 보는 로또">
+      <View style={styles.hub}>
+        {HUB.map((h) => (
+          <PressableLink key={h.title} href={h.href}>
+            <Card style={styles.storeLink}>
+              <View style={[styles.storeIcon, { backgroundColor: `${h.color}1A` }]}>
+                <Icon name={h.icon} size={22} color={h.color} />
+              </View>
+              <View style={styles.flex}>
+                <ThemedText type="smallBold">{h.title}</ThemedText>
+                <ThemedText type="caption" themeColor="textTertiary">
+                  {h.desc}
+                </ThemedText>
+              </View>
+              <Icon name="chevronRight" size={16} color={theme.textTertiary} />
+            </Card>
+          </PressableLink>
+        ))}
+      </View>
+
+      <View style={styles.statsHead}>
+        <ThemedText type="heading">번호 통계</ThemedText>
+        <ThemedText type="caption" themeColor="textTertiary">
+          {range}
+        </ThemedText>
+      </View>
       <Segmented options={TABS} value={tab} onChange={setTab} />
       <Chips options={PERIODS} value={period} onChange={setPeriod} />
       <Notice>추첨은 매번 완전한 무작위라서, 지난 통계가 다음 번호에 영향을 주지 않아요.</Notice>
@@ -336,21 +380,6 @@ export default function StatsScreen() {
       {tab === 'numbers' && <NumbersTab draws={draws} />}
       {tab === 'patterns' && <PatternsTab draws={draws} />}
       {tab === 'records' && <RecordsTab draws={draws} />}
-
-      <PressableLink href="/stats/stores">
-        <Card style={styles.storeLink}>
-          <View style={[styles.storeIcon, { backgroundColor: `${theme.warning}1A` }]}>
-            <Icon name="store" size={22} color={theme.warning} />
-          </View>
-          <View style={styles.flex}>
-            <ThemedText type="smallBold">1등 당첨 판매점</ThemedText>
-            <ThemedText type="caption" themeColor="textTertiary">
-              1등이 많이 나온 판매점과 지역별 당첨 수
-            </ThemedText>
-          </View>
-          <Icon name="chevronRight" size={16} color={theme.textTertiary} />
-        </Card>
-      </PressableLink>
 
       <Collapsible title="표로 보기 (번호별 출현 횟수)">
         <NumberTable draws={draws} />
@@ -401,6 +430,8 @@ const styles = StyleSheet.create({
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   list: { paddingVertical: 4 },
   roundCol: { width: 64 },
+  hub: { gap: 10 },
+  statsHead: { gap: 2, marginTop: Spacing.two, paddingHorizontal: Spacing.one },
   storeLink: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: Spacing.three },
   storeIcon: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   table: { gap: 0, paddingVertical: 8 },

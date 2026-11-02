@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card, Pill, Section } from '@/components/card';
-import { DrawNumbers } from '@/components/draw-numbers';
+import { DrawHero } from '@/components/draw-hero';
 import { Icon } from '@/components/icon';
 import { PressableLink } from '@/components/pressable-link';
 import { Page } from '@/components/page';
@@ -129,7 +129,6 @@ function RoundNav({ prev, next }: { prev?: number; next?: number }) {
 }
 
 export default function RoundScreen() {
-  const theme = useTheme();
   const { round } = useLocalSearchParams<{ round: string }>();
   const d = getDraw(Number(round));
 
@@ -144,13 +143,6 @@ export default function RoundScreen() {
   const prev = getDraw(d.round - 1);
   const next = getDraw(d.round + 1);
   const first = d.ranks[0];
-  const picks = d.firstPrizePickTypes;
-  const pickText =
-    picks && first.winners > 0
-      ? [picks.auto && `자동 ${picks.auto}`, picks.manual && `수동 ${picks.manual}`, picks.semiAuto && `반자동 ${picks.semiAuto}`]
-          .filter(Boolean)
-          .join(' · ')
-      : null;
 
   return (
     <Page
@@ -158,30 +150,11 @@ export default function RoundScreen() {
       subtitle={`${formatDateKo(d.drawDate)} 추첨`}
       back={{ href: '/round', label: '회차 목록' }}
       right={<RoundNav prev={prev?.round} next={next?.round} />}>
-      <Card>
-        <DrawNumbers numbers={d.numbers} bonus={d.bonus} size={42} fill />
-        <View style={[styles.stats, { borderColor: theme.border }]}>
-          <View style={styles.flex}>
-            <ThemedText type="caption" themeColor="textTertiary">
-              1등 1인당
-            </ThemedText>
-            <ThemedText type="heading">{first.winners > 0 ? formatKRW(first.prize) : '당첨자 없음'}</ThemedText>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.flex}>
-            <ThemedText type="caption" themeColor="textTertiary">
-              1등 당첨자
-            </ThemedText>
-            <ThemedText type="heading">{first.winners}명</ThemedText>
-            {pickText && (
-              <ThemedText type="caption" themeColor="textTertiary">
-                {pickText}
-              </ThemedText>
-            )}
-          </View>
-        </View>
-        <Button label="내 번호로 당첨 확인" icon="ticket" variant="primary" onPress={() => router.push(`/my?round=${d.round}`)} />
-      </Card>
+      <DrawHero
+        draw={d}
+        title="당첨번호"
+        primary={{ label: '내 번호로 당첨 확인', onPress: () => router.push(`/my?round=${d.round}`) }}
+      />
 
       <RankTable d={d} />
       <RoundStores round={d.round} firstWinners={first.winners} />

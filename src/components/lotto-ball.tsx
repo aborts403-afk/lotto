@@ -10,7 +10,20 @@ function ballColor(n: number): string {
 }
 
 // `muted`: drawn faded (e.g. a ticket number that did not match). `ring`: outlined (e.g. matched the bonus).
-export function LottoBall({ n, size = 36, muted, ring }: { n: number; size?: number; muted?: boolean; ring?: boolean }) {
+// `outline`: a thin border in this color, to separate the ball from a colored background.
+export function LottoBall({
+  n,
+  size = 36,
+  muted,
+  ring,
+  outline,
+}: {
+  n: number;
+  size?: number;
+  muted?: boolean;
+  ring?: boolean;
+  outline?: string;
+}) {
   return (
     <View
       style={[
@@ -18,6 +31,7 @@ export function LottoBall({ n, size = 36, muted, ring }: { n: number; size?: num
         { width: size, height: size, borderRadius: size / 2, backgroundColor: ballColor(n) },
         muted && styles.muted,
         ring && styles.ring,
+        outline ? { borderWidth: 2, borderColor: outline } : null,
       ]}
       accessibilityLabel={`${n}번`}>
       <Text style={[styles.text, { fontSize: size * 0.42 }]}>{n}</Text>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { StyleProp, TextStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -50,4 +51,21 @@ export function NextDrawCountdown() {
   if (!hydrated) return <ThemedText type="heading">매주 토요일</ThemedText>;
   const next = nextDrawTime(new Date(now));
   return <ThemedText type="heading">{formatCountdown(next.getTime() - now)} 남음</ThemedText>;
+}
+
+/** "추첨까지 4일 22시간 49분" as plain text in the given style (e.g. on a colored card). */
+export function NextDrawCountdownInline({ style }: { style?: StyleProp<TextStyle> }) {
+  const hydrated = useHydrated();
+  const now = useNow();
+  if (!hydrated)
+    return (
+      <ThemedText type="caption" style={style}>
+        매주 토요일 오후 8시 35분 추첨
+      </ThemedText>
+    );
+  return (
+    <ThemedText type="caption" style={style}>
+      추첨까지 {formatCountdown(nextDrawTime(new Date(now)).getTime() - now)}
+    </ThemedText>
+  );
 }

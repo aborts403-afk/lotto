@@ -50,7 +50,8 @@
     "preview": "npx expo export -p web && wrangler dev",
     "check:generator": "tsx scripts/check-generator.ts",
     "sync:draws": "tsx scripts/sync-draws.mts",
-    "check:stats": "tsx scripts/check-stats.ts"
+    "check:stats": "tsx scripts/check-stats.ts",
+    "check:payout": "tsx scripts/check-payout.ts"
   },
   "private": true
 }
