@@ -37,3 +37,27 @@ export function parseNumbers(text: string): number[] {
   }
   return out;
 }
+
+export type TicketQr = { round: number; games: number[][] };
+
+/**
+ * Reads the QR code printed on a Lotto 6/45 ticket, e.g.
+ * https://m.dhlottery.co.kr/qr.do?method=winQr&v=1125m152023263944m070827293643…0000000645
+ * `v` = 4-digit round, then one letter + 12 digits (six 2-digit numbers) per game, then a serial that
+ * is ignored. dhlottery does not publish this format; it is inferred from real ticket URLs.
+ * Returns null when the text is not a ticket QR or a game is not six distinct numbers 1..45.
+ */
+export function parseTicketQr(text: string): TicketQr | null {
+  const v = /[?&]v=([0-9a-z]+)/i.exec(text.trim())?.[1];
+  if (!v) return null;
+  const round = Number(v.slice(0, 4));
+  if (!/^\d{4}$/.test(v.slice(0, 4)) || round < 1) return null;
+  const games: number[][] = [];
+  for (const m of v.slice(4).matchAll(/[a-z](\d{12})/gi)) {
+    const nums = (m[1].match(/\d{2}/g) ?? []).map(Number);
+    if (nums.some((n) => n < 1 || n > 45) || new Set(nums).size !== 6) return null;
+    games.push(nums.sort((a, b) => a - b));
+    if (games.length === 5) break; // a ticket holds at most five games (A–E)
+  }
+  return games.length ? { round, games } : null;
+}

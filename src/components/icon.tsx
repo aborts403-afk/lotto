@@ -24,6 +24,7 @@ const ICONS = {
   tune: { ios: 'slider.horizontal.3', android: 'tune', web: 'tune' },
   trash: { ios: 'trash', android: 'delete', web: 'delete' },
   plus: { ios: 'plus', android: 'add', web: 'add' },
+  qr: { ios: 'qrcode.viewfinder', android: 'qr_code_scanner', web: 'qr_code_scanner' },
   map: { ios: 'map', android: 'map', web: 'map' },
   diagnose: { ios: 'stethoscope', android: 'troubleshoot', web: 'troubleshoot' },
   person: { ios: 'person.fill', android: 'person', web: 'person' },

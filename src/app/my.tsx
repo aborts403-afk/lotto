@@ -11,6 +11,7 @@ import { LottoBall, LottoBalls } from '@/components/lotto-ball';
 import { PendingRoundText, usePendingRound } from '@/components/next-draw';
 import { NumberPicker } from '@/components/number-picker';
 import { Page } from '@/components/page';
+import { QrScanner } from '@/components/qr-scanner';
 import { TabStrip } from '@/components/tab-strip';
 import { ThemedText } from '@/components/themed-text';
 import { RANK_COLORS } from '@/components/ticket-result';
@@ -21,7 +22,7 @@ import { addTickets, removeTickets, restoreTickets, useMyTickets, type MyTicket 
 import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
 import { formatCount, formatDateDots, formatKRW, formatKRWShort } from '@/lib/format';
-import { checkTicket, parseNumbers, RANK_RULES, type CheckResult } from '@/lib/lotto/check';
+import { checkTicket, parseNumbers, RANK_RULES, type CheckResult, type TicketQr } from '@/lib/lotto/check';
 import type { Draw } from '@/lib/lotto/draws';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
 
@@ -143,6 +144,73 @@ function ResultBanner({ result, draw }: { result: CheckResult; draw: Draw }) {
   );
 }
 
+// Every game on a scanned ticket, checked against its round, with one save for the whole ticket.
+function QrResult({ ticket, onSaved, onRescan }: { ticket: TicketQr; onSaved: (msg: string) => void; onRescan: () => void }) {
+  const theme = useTheme();
+  const lookup = useDrawLookup();
+  const draw = lookup(ticket.round);
+  const results = draw ? ticket.games.map((g) => checkTicket(g, draw)) : [];
+  const won = results.filter((r) => r.rank);
+  const prize = won.reduce((sum, r) => sum + r.prize, 0);
+  const save = async () => {
+    const added = await addTickets(ticket.round, ticket.games, 'qr');
+    onSaved(added ? `${ticket.round}회 번호로 ${added}장 저장했어요` : `이미 ${ticket.round}회에 저장한 번호예요`);
+  };
+  return (
+    <Card style={styles.group}>
+      <View style={styles.between}>
+        <ThemedText type="heading">{ticket.round}회 용지</ThemedText>
+        {!draw ? (
+          <Pill label={`추첨 전 · ${ticket.games.length}게임`} color={theme.primary} soft />
+        ) : won.length ? (
+          <Pill label={`${ticket.games.length}게임 중 ${won.length}개 당첨`} color={theme.success} soft />
+        ) : (
+          <Pill label={`${ticket.games.length}게임 · 당첨 없음`} color={theme.textTertiary} soft />
+        )}
+      </View>
+      {draw && won.length > 0 && (
+        <View style={styles.amountBlock}>
+          <ThemedText style={[styles.amount, { color: theme.primary }]}>{formatKRW(prize)}</ThemedText>
+          <ThemedText type="caption" themeColor="textTertiary">
+            세금 떼기 전 금액이에요
+          </ThemedText>
+        </View>
+      )}
+      {draw ? (
+        <View style={[styles.groupDraw, { backgroundColor: theme.backgroundSelected }]}>
+          <ThemedText type="caption" themeColor="textTertiary">
+            당첨번호
+          </ThemedText>
+          <DrawNumbers numbers={draw.numbers} bonus={draw.bonus} size={22} />
+        </View>
+      ) : (
+        <PendingRoundText round={ticket.round} />
+      )}
+      <View>
+        {ticket.games.map((g, i) => {
+          const r = draw ? results[i] : null;
+          return (
+            <View key={i} style={[styles.ticket, i < ticket.games.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}>
+              <ThemedText type="caption" themeColor="textTertiary" style={styles.gameLabel}>
+                {'ABCDE'[i]}
+              </ThemedText>
+              <View style={styles.ticketBody}>
+                <LottoBalls numbers={g} size={32} highlight={r ? r.matched : undefined} ring={r?.bonusMatched && draw ? [draw.bonus] : undefined} />
+                {r && <RankPill result={r} />}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      <Button label={`${ticket.round}회 번호로 ${ticket.games.length}장 저장`} icon="bookmark" variant="primary" onPress={save} />
+      <Button label="다른 용지 스캔" icon="qr" variant="ghost" onPress={onRescan} />
+      <ThemedText type="caption" themeColor="textTertiary">
+        QR 결과는 참고용이에요. 당첨금을 받을 때는 실물 용지로 확인해 주세요.
+      </ThemedText>
+    </Card>
+  );
+}
+
 function CheckTab({
   initialRound,
   initialNumbers,
@@ -161,6 +229,8 @@ function CheckTab({
   );
   const [numbers, setNumbers] = useState<number[]>(initialNumbers);
   const [text, setText] = useState(initialNumbers.join(' '));
+  const [scanning, setScanning] = useState(false);
+  const [qr, setQr] = useState<TicketQr | null>(null);
   const draw = lookup(round);
   const sorted = [...numbers].sort((a, b) => a - b);
   const result = draw && numbers.length === 6 ? checkTicket(sorted, draw) : null;
@@ -181,6 +251,16 @@ function CheckTab({
 
   return (
     <>
+      <QrScanner
+        visible={scanning}
+        onClose={() => setScanning(false)}
+        onTicket={(t) => {
+          setQr(t);
+          if (t.round <= nextRound) setRound(t.round);
+        }}
+      />
+      <Button label="복권 용지 QR 스캔" icon="qr" variant="tonal" size="lg" onPress={() => setScanning(true)} />
+      {qr && <QrResult ticket={qr} onSaved={onSaved} onRescan={() => setScanning(true)} />}
       <Card>
         <RoundSelector round={round} max={nextRound} draw={draw} onChange={setRound} />
         {draw ? (
@@ -542,6 +622,7 @@ const styles = StyleSheet.create({
   ticket: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 10 },
   saveRow: { gap: Spacing.two },
   grow: { flex: 1 },
+  gameLabel: { width: 14, fontWeight: '800' },
   ticketBody: { flex: 1, gap: 6 },
   rankPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignSelf: 'flex-start' },
   rankText: { fontWeight: '800' },

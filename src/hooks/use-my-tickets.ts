@@ -3,7 +3,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 
 // Tickets the user saved ("내 번호"). Stored only on this device (AsyncStorage; localStorage on web).
 
-export type TicketSource = 'generate' | 'manual';
+export type TicketSource = 'generate' | 'manual' | 'qr';
 
 export type MyTicket = {
   id: string;

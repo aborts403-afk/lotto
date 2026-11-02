@@ -80,3 +80,20 @@ console.log(
   all.best,
 );
 console.log('ok');
+
+// Ticket QR (examples are real dhlottery URLs).
+import('../src/lib/lotto/check').then(({ parseTicketQr }) => {
+  const one = parseTicketQr('https://m.dhlottery.co.kr/qr.do?method=winQr&v=1107m061430314041');
+  assert.deepEqual(one, { round: 1107, games: [[6, 14, 30, 31, 40, 41]] });
+  const five = parseTicketQr(
+    'https://m.dhlottery.co.kr/qr.do?method=winQr&v=1125m152023263944m070827293643m161722303743m010821273639m2533344044450000000645',
+  );
+  assert.equal(five?.round, 1125);
+  assert.equal(five?.games.length, 5);
+  assert.deepEqual(five?.games[4], [25, 33, 34, 40, 44, 45]);
+  // older tickets: zero-padded round, q marker
+  assert.deepEqual(parseTicketQr('http://qr.dhlottery.co.kr/?v=0868q022935364043'), { round: 868, games: [[2, 29, 35, 36, 40, 43]] });
+  assert.equal(parseTicketQr('https://example.com'), null);
+  assert.equal(parseTicketQr('https://m.dhlottery.co.kr/qr.do?v=1125m151515151515'), null); // repeated numbers
+  console.log('qr ok');
+});
