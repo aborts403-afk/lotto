@@ -12,6 +12,7 @@ import {
   type TicketRow,
 } from './db';
 import { fetchAround, fetchWinningTickets, FIRST_ROUND_WITH_STORES, unknownKeysSeen } from './dhlottery';
+import { storesSummary } from './stores';
 
 type Env = {
   DB: D1Database;
@@ -124,6 +125,10 @@ async function handleApi(url: URL, env: Env): Promise<Response> {
       .bind(Number(stores[1]))
       .all<TicketRow>();
     return json(results.map(ticketToApi), { maxAge: 3600 });
+  }
+
+  if (path === '/api/stores/summary') {
+    return json(await storesSummary(env.DB), { maxAge: 3600 });
   }
 
   if (path === '/api/health') {

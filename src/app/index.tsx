@@ -16,7 +16,7 @@ import { SITE_NAME, SITE_URL } from '@/lib/site';
 export function generateMetadata(): Metadata {
   const d = DRAWS_DESC[0];
   const title = `${SITE_NAME} - 로또 ${d.round}회 당첨번호와 남들이 안 고르는 번호`;
-  const description = `로또 ${d.round}회 당첨번호 ${d.numbers.join(', ')} 보너스 ${d.bonus}. 회차별 결과, 번호 통계, 1등 상금을 나눌 사람이 적은 번호 생성기.`;
+  const description = `로또 ${d.round}회 당첨번호 ${d.numbers.join(', ')} 보너스 ${d.bonus}. 당첨 확인, 회차별 결과, 번호 통계, 1등 판매점, 1등 상금을 나눌 사람이 적은 번호 생성기.`;
   return {
     title,
     description,
@@ -26,9 +26,11 @@ export function generateMetadata(): Metadata {
 }
 
 const LINKS: { href: Href; title: string; desc: string }[] = [
-  { href: '/generate', title: '번호 생성', desc: '남들이 잘 안 고르는 번호' },
-  { href: '/round', title: '회차별 당첨번호', desc: '1회부터 최신 회차까지' },
-  { href: '/stats', title: '번호 통계', desc: '많이 나온 번호, 홀짝 비율' },
+  { href: '/my', title: '당첨 확인', desc: '내 번호 저장하고 결과 보기' },
+  { href: '/generate', title: '번호 생성', desc: '7가지 방식으로 번호 뽑기' },
+  { href: '/round', title: '회차별 당첨번호', desc: '회차·번호로 찾기' },
+  { href: '/stats', title: '번호 통계', desc: '많이 나온 번호, 합계, 끝수' },
+  { href: '/stats/stores', title: '1등 판매점', desc: '1등 많이 나온 곳, 지역별' },
 ];
 
 export default function HomeScreen() {
@@ -56,9 +58,14 @@ export default function HomeScreen() {
             ? ` (자동 ${picks.auto}${picks.manual ? ` · 수동 ${picks.manual}` : ''}${picks.semiAuto ? ` · 반자동 ${picks.semiAuto}` : ''})`
             : ''}
         </ThemedText>
-        <Link href={`/round/${latest.round}`}>
-          <ThemedText type="linkPrimary">당첨금과 인기 조합 분석 보기 →</ThemedText>
-        </Link>
+        <View style={styles.cardLinks}>
+          <Link href={`/my?round=${latest.round}`}>
+            <ThemedText type="linkPrimary">내 번호 당첨 확인 →</ThemedText>
+          </Link>
+          <Link href={`/round/${latest.round}`}>
+            <ThemedText type="linkPrimary">당첨금·판매점 보기 →</ThemedText>
+          </Link>
+        </View>
       </Card>
 
       <Card>
@@ -109,6 +116,7 @@ const styles = StyleSheet.create({
   header: { gap: Spacing.one },
   latest: { gap: Spacing.three },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
+  cardLinks: { flexDirection: 'row', flexWrap: 'wrap', columnGap: Spacing.four },
   links: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   linkItem: { flexGrow: 1, flexBasis: 160 },
   linkCard: { gap: 2 },

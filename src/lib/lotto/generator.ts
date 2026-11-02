@@ -83,7 +83,7 @@ export function randomCombo(rng: () => number = Math.random): Combo {
 }
 
 // Small seeded PRNG (mulberry32) so the reference sample is identical on every run.
-function seededRng(seed: number): () => number {
+export function seededRng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -121,7 +121,40 @@ export function lessPopularThanPercent(combo: Combo): number {
 
 export type GeneratedCombo = { numbers: Combo; lessPopularThan: number };
 
-export type GenerateMode = 'unpopular' | 'random';
+export type GenerateMode =
+  | 'unpopular' // least popular combinations (fewer people to share the 1st prize with)
+  | 'random' // uniform, like an auto-pick ticket
+  | 'hot' // numbers weighted toward those drawn often recently
+  | 'cold' // numbers weighted toward those not drawn for a long time
+  | 'balanced' // shapes most past winning numbers have (odd/even, high/low, sum, no long runs)
+  | 'wheel' // every set is made only from the user's candidate numbers
+  | 'phrase'; // seeded by a phrase (name, birthday, dream...): same phrase, same numbers this week
+
+// String -> 32-bit seed (FNV-1a), for the phrase mode.
+export function hashSeed(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+export const BALANCED_SUM = [100, 175] as const;
+
+// "Looks like a typical winning combination": 2-4 odd, 2-4 high (23-45), sum 100-175, at most one
+// consecutive pair, and numbers from at least three of the five ranges (1-10, 11-20, ...).
+// Every combination is equally likely to win; this only matches the most common shape.
+export function isBalanced(combo: Combo): boolean {
+  const odd = combo.filter((n) => n % 2 === 1).length;
+  const high = combo.filter((n) => n >= 23).length;
+  const sum = combo.reduce((a, b) => a + b, 0);
+  const s = [...combo].sort((a, b) => a - b);
+  let pairs = 0;
+  for (let i = 1; i < s.length; i++) if (s[i] === s[i - 1] + 1) pairs++;
+  const ranges = new Set(s.map((n) => Math.min(4, Math.floor((n - 1) / 10)))).size;
+  return odd >= 2 && odd <= 4 && high >= 2 && high <= 4 && sum >= BALANCED_SUM[0] && sum <= BALANCED_SUM[1] && pairs <= 1 && ranges >= 3;
+}
 
 export type GenerateOptions = {
   mode: GenerateMode;
@@ -130,13 +163,16 @@ export type GenerateOptions = {
   excluded?: readonly number[]; // never included
   oddCount?: number | null; // exact number of odd numbers, null = any
   sumRange?: readonly [number, number] | null; // inclusive, null = any
+  weights?: readonly number[] | null; // hot/cold: relative weight of each number 1..45 (index n-1)
+  pool?: readonly number[] | null; // wheel: candidate numbers; sets use only these (plus fixed)
 };
 
 export type GenerateError =
   | 'tooManyFixed' // more than 5 fixed numbers
   | 'notEnoughNumbers' // exclusions leave fewer than 6 numbers
   | 'oddEvenImpossible' // fixed/excluded numbers make the odd/even split impossible
-  | 'noMatch'; // nothing satisfied the conditions (usually the sum range)
+  | 'noMatch' // nothing satisfied the conditions (usually the sum range)
+  | 'poolTooSmall'; // wheel: fewer than 6 candidate numbers
 
 export type GenerateResult = {
   sets: GeneratedCombo[];
@@ -150,6 +186,21 @@ export const MAX_FIXED = 5;
 const CANDIDATES = 4000;
 const MAX_ATTEMPTS = 40000;
 const POOL_FRACTION = 0.1; // unpopular mode: pick from the least-popular 10% of pattern-free candidates
+
+// k distinct numbers, each pick proportional to its weight among those not yet picked.
+function weightedSample(from: readonly number[], k: number, weights: readonly number[], rng: () => number): number[] {
+  const left = [...from];
+  const out: number[] = [];
+  for (let i = 0; i < k && left.length; i++) {
+    const total = left.reduce((sum, n) => sum + weights[n - 1], 0);
+    let r = rng() * total;
+    let j = 0;
+    while (j < left.length - 1 && (r -= weights[left[j] - 1]) >= 0) j++;
+    out.push(left[j]);
+    left.splice(j, 1);
+  }
+  return out;
+}
 
 function sample<T>(from: readonly T[], k: number, rng: () => number): T[] {
   const a = [...from];
@@ -166,9 +217,14 @@ export function generate(options: GenerateOptions, rng: () => number = Math.rand
   const excluded = new Set(options.excluded ?? []);
   const oddCount = options.oddCount ?? null;
   const sumRange = options.sumRange ?? null;
+  const weighted = (mode === 'hot' || mode === 'cold') && options.weights?.length === 45 ? options.weights : null;
+  const pool = mode === 'wheel' ? new Set(options.pool ?? []) : null;
 
   if (fixed.length > MAX_FIXED) return { sets: [], error: 'tooManyFixed' };
-  const free = Array.from({ length: 45 }, (_, i) => i + 1).filter((n) => !excluded.has(n) && !fixed.includes(n));
+  if (pool && pool.size + fixed.filter((n) => !pool.has(n)).length < 6) return { sets: [], error: 'poolTooSmall' };
+  const free = Array.from({ length: 45 }, (_, i) => i + 1).filter(
+    (n) => !excluded.has(n) && !fixed.includes(n) && (!pool || pool.has(n)),
+  );
   const need = 6 - fixed.length;
   if (free.length < need) return { sets: [], error: 'notEnoughNumbers' };
 
@@ -185,35 +241,38 @@ export function generate(options: GenerateOptions, rng: () => number = Math.rand
   }
 
   const draw = (): Combo => {
-    const picked = oddCount === null ? sample(free, need, rng) : [...sample(freeOdd, needOdd, rng), ...sample(freeEven, need - needOdd, rng)];
+    const pick = (from: readonly number[], k: number) => (weighted ? weightedSample(from, k, weighted, rng) : sample(from, k, rng));
+    const picked = oddCount === null ? pick(free, need) : [...pick(freeOdd, needOdd), ...pick(freeEven, need - needOdd)];
     return [...fixed, ...picked].sort((a, b) => a - b);
   };
-  const inSum = (c: Combo) => {
+  const accept = (c: Combo) => {
+    if (mode === 'balanced' && !isBalanced(c)) return false;
     if (!sumRange) return true;
     const sum = c.reduce((a, b) => a + b, 0);
     return sum >= sumRange[0] && sum <= sumRange[1];
   };
 
-  // Collect distinct candidates that satisfy every condition.
-  const target = mode === 'random' ? count : CANDIDATES;
+  // Collect distinct candidates that satisfy every condition. Only the unpopular mode needs a large
+  // pool to rank; the others keep the first `count` distinct sets, in the order they were drawn.
+  const target = mode === 'unpopular' ? CANDIDATES : count;
   const candidates = new Map<string, Combo>();
   for (let i = 0; i < MAX_ATTEMPTS && candidates.size < target; i++) {
     const c = draw();
-    if (inSum(c)) candidates.set(c.join(','), c);
+    if (accept(c)) candidates.set(c.join(','), c);
   }
   if (candidates.size === 0) return { sets: [], error: 'noMatch' };
 
   const toResult = (c: Combo): GeneratedCombo => ({ numbers: c, lessPopularThan: lessPopularThanPercent(c) });
 
-  if (mode === 'random') return { sets: [...candidates.values()].slice(0, count).map(toResult) };
+  if (mode !== 'unpopular') return { sets: [...candidates.values()].slice(0, count).map(toResult) };
 
-  let pool = [...candidates.values()];
+  let ranked = [...candidates.values()];
   let patternsRelaxed = false;
-  const patternFree = pool.filter((c) => patternFlags(c).length === 0);
-  if (patternFree.length >= count) pool = patternFree;
+  const patternFree = ranked.filter((c) => patternFlags(c).length === 0);
+  if (patternFree.length >= count) ranked = patternFree;
   else patternsRelaxed = true;
 
-  const scored = pool.map((combo) => ({ combo, score: popularityScore(combo) })).sort((a, b) => a.score - b.score);
+  const scored = ranked.map((combo) => ({ combo, score: popularityScore(combo) })).sort((a, b) => a.score - b.score);
   const best = scored.slice(0, Math.max(count, Math.floor(scored.length * POOL_FRACTION)));
   const picks = sample(best.map((s) => s.combo), Math.min(count, best.length), rng);
   return { sets: picks.map(toResult), patternsRelaxed };

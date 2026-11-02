@@ -1,6 +1,6 @@
 # 로또 노트
 
-로또 당첨번호 조회, 번호 생성, 내 번호 당첨 확인 앱 (Expo: 웹 + 안드로이드).
+로또 당첨번호 조회, 번호 생성, 내 번호 당첨 확인, 통계·판매점 앱 (Expo: 웹 + 안드로이드).
 
 - 웹: https://lotto.q-ova.com
 - 앱 코드: `src/` (Expo Router)
@@ -13,6 +13,7 @@
 | `GET /api/draws?limit=N` | 회차 목록 (최신순, limit 생략 시 전체) |
 | `GET /api/draws/:round` | 특정 회차 |
 | `GET /api/draws/:round/stores` | 1·2등 당첨 판매점 |
+| `GET /api/stores/summary` | 판매점 순위 (전체 30곳, 지역별 15곳)와 지역별 1등 수. 광주·전남은 합쳐서 셉니다 |
 | `GET /api/health` | 수집 상태 (최신 회차가 8일 넘게 지나면 503) |
 
 ## 당첨번호 수집
@@ -44,8 +45,20 @@
   .venv/bin/python analysis/popularity.py
   ```
 - `src/lib/lotto/generator.ts`: 사람들이 일부러 고르는 모양(연속 3개, 등차 5개, 용지 한 줄 4개, 모두 31 이하, 같은 끝자리 3개)을 빼고, 인기도 하위 10% 후보 중에서 무작위로 뽑습니다.
-- `generate()` 옵션: 모드(남들이 안 고르는 번호 / 완전 무작위), 세트 수, 고정수(최대 5개), 제외수, 홀수 개수, 합계 범위. 조건이 불가능하면 `error`를 돌려주고, 고정수 때문에 흔한 모양을 피할 수 없으면 `patternsRelaxed`로 알려 줍니다.
+- 모드: 남들이 안 고르는 번호, 완전 무작위, 당첨번호 닮은꼴(`isBalanced`), 많이 나온 번호 위주(최근 100회 출현 횟수² 가중치), 오래 안 나온 번호 위주(미출현 회차 수 가중치), 내 후보로 조합(`pool`), 문구로 뽑기(문구+회차로 시드를 만들어 같은 문구는 그 회차 동안 같은 번호).
+- `generate()` 옵션: 모드, 세트 수, 고정수(최대 5개), 제외수, 홀수 개수, 합계 범위. 조건이 불가능하면 `error`를 돌려주고, 고정수 때문에 흔한 모양을 피할 수 없으면 `patternsRelaxed`로 알려 줍니다.
 - `npm run check:generator`: 생성기 점검
+
+## 당첨 확인과 내 번호 (`/my`)
+- 회차와 번호 6개를 넣으면 등수와 당첨금을 보여 줍니다 (`src/lib/lotto/check.ts`). `/my?round=1248&numbers=1,2,3,4,5,6`로 미리 채울 수 있습니다.
+- 저장한 번호는 기기에만 남습니다 (AsyncStorage, 웹은 localStorage). 번호 생성 화면에서도 저장할 수 있고, 추첨이 끝나면 회차별로 결과를 보여 줍니다.
+- 앱 번들에 없는 최신 회차는 `/api/draws?limit=N`로 한 번 받아 옵니다 (`src/hooks/use-latest-draw.ts`). 설치한 앱이 오래돼도 당첨 확인이 됩니다.
+
+## 통계와 판매점
+- `/stats`: 번호별 출현, 홀짝·고저, 합계 분포, 끝수, 연속 번호, 이월수, 많이 나온 번호 쌍. 이론값은 정확히 계산합니다. `npm run check:stats`로 점검합니다.
+- `/stats/:n`: 번호별 상세 (출현 간격, 같이 나온 번호, 사람들이 고르는 정도).
+- `/stats/stores`: 빌드할 때 `/api/stores/summary`를 `src/data/stores.json`으로 받습니다. API를 못 받으면 커밋된 파일을 그대로 씁니다. 회차 상세의 판매점 목록은 화면에서 `/api/draws/:round/stores`를 불러옵니다.
+- 로컬에서 Worker로 빌드 데이터 받기: `API_BASE=http://localhost:8787 npx tsx scripts/sync-draws.mts`
 
 ## 회차별 페이지와 자동 배포
 - `/round`, `/round/:round`: 빌드할 때 `scripts/sync-draws.mts`가 `/api/draws`를 받아 `src/data/draws.json`, `public/sitemap.xml`, `public/robots.txt`를 만들고, 회차마다 정적 HTML을 생성합니다 (검색 노출용).

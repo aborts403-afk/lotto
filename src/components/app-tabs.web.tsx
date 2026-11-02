@@ -6,9 +6,10 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
-import { Pressable, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet, useWindowDimensions } from 'react-native';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
@@ -27,6 +28,9 @@ export default function AppTabs() {
           </TabTrigger>
           <TabTrigger name="generate" href="/generate" asChild>
             <TabButton>번호 생성</TabButton>
+          </TabTrigger>
+          <TabTrigger name="my" href="/my" asChild>
+            <TabButton>내 번호</TabButton>
           </TabTrigger>
           <TabTrigger name="stats" href="/stats" asChild>
             <TabButton>통계</TabButton>
@@ -52,13 +56,22 @@ export function TabButton({ children, isFocused, ref: _ref, ...props }: TabTrigg
   );
 }
 
+// Five tabs and the brand do not fit on a phone-width browser, so narrow screens drop the brand and spread the tabs.
+const NARROW = 560;
+
 export function CustomTabList(props: TabListProps) {
+  const hydrated = useHydrated();
+  const width = useWindowDimensions().width;
+  // The static HTML has no window size; render the compact bar until hydrated so phones never overflow.
+  const narrow = hydrated ? width < NARROW : true;
   return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          로또 노트
-        </ThemedText>
+    <View {...props} style={[styles.tabListContainer, narrow && styles.tabListNarrow]}>
+      <ThemedView type="backgroundElement" style={[styles.innerContainer, narrow && styles.innerNarrow]}>
+        {!narrow && (
+          <ThemedText type="smallBold" style={styles.brandText}>
+            로또 노트
+          </ThemedText>
+        )}
 
         {props.children}
       </ThemedView>
@@ -85,6 +98,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     maxWidth: MaxContentWidth,
   },
+  tabListNarrow: {
+    padding: Spacing.two,
+  },
+  innerNarrow: {
+    paddingHorizontal: Spacing.one,
+    gap: 0,
+    justifyContent: 'space-between',
+  },
   brandText: {
     marginRight: 'auto',
   },
@@ -93,7 +114,7 @@ const styles = StyleSheet.create({
   },
   tabButtonView: {
     paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: 12,
     borderRadius: Spacing.three,
   },
 });

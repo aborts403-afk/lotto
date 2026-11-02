@@ -1,6 +1,15 @@
 // Sanity checks for src/lib/lotto/generator.ts:  npm run check:generator
 import assert from 'node:assert/strict';
-import { generate, generateUnpopular, patternFlags, randomCombo, lessPopularThanPercent } from '../src/lib/lotto/generator';
+import {
+  generate,
+  generateUnpopular,
+  hashSeed,
+  isBalanced,
+  lessPopularThanPercent,
+  patternFlags,
+  randomCombo,
+  seededRng,
+} from '../src/lib/lotto/generator';
 
 assert.deepEqual(patternFlags([1, 2, 3, 20, 33, 44]), ['run3']);
 assert.ok(patternFlags([5, 10, 15, 20, 25, 44]).includes('arithmetic5'));
@@ -50,4 +59,32 @@ assert.equal(generate({ mode: 'random', count: 1, fixed: [1, 2, 3, 4, 5], sumRan
 const few = generate({ mode: 'unpopular', count: 5, fixed: [1, 2, 3, 4, 5], excluded: Array.from({ length: 38 }, (_, i) => i + 8) });
 assert.equal(few.sets.length, 2);
 assert.equal(few.patternsRelaxed, true);
+
+// Modes
+const balanced = generate({ mode: 'balanced', count: 10 });
+assert.equal(balanced.sets.length, 10);
+assert.ok(balanced.sets.every((s) => isBalanced(s.numbers)));
+assert.ok(!isBalanced([1, 2, 3, 4, 5, 6]));
+
+const pool = [3, 8, 15, 22, 29, 34, 41];
+const wheel = generate({ mode: 'wheel', count: 10, pool });
+assert.equal(wheel.sets.length, 7); // C(7,6) = 7 combinations exist
+assert.ok(wheel.sets.every((s) => s.numbers.every((n) => pool.includes(n))));
+assert.equal(generate({ mode: 'wheel', count: 1, pool: [1, 2, 3, 4, 5] }).error, 'poolTooSmall');
+const wheelFixed = generate({ mode: 'wheel', count: 5, pool, fixed: [3] });
+assert.ok(wheelFixed.sets.every((s) => s.numbers.includes(3)));
+
+// Weighted: number 45 gets almost all the weight, so it should appear in nearly every set.
+const weights = Array.from({ length: 45 }, (_, i) => (i === 44 ? 1000 : 1));
+const hot = generate({ mode: 'hot', count: 10, weights });
+assert.ok(hot.sets.filter((s) => s.numbers.includes(45)).length >= 9);
+const hotOdd = generate({ mode: 'hot', count: 10, weights, oddCount: 2 });
+assert.ok(hotOdd.sets.every((s) => s.numbers.filter((n) => n % 2 === 1).length === 2));
+
+// Phrase: same seed, same numbers.
+const a = generate({ mode: 'phrase', count: 3 }, seededRng(hashSeed('홍길동|1249')));
+const b = generate({ mode: 'phrase', count: 3 }, seededRng(hashSeed('홍길동|1249')));
+const c = generate({ mode: 'phrase', count: 3 }, seededRng(hashSeed('홍길동|1250')));
+assert.deepEqual(a.sets, b.sets);
+assert.notDeepEqual(a.sets, c.sets);
 console.log('ok');

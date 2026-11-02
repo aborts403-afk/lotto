@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { Card } from '@/components/card';
 import { DrawNumbers } from '@/components/draw-numbers';
 import { Page } from '@/components/page';
+import { RoundStores } from '@/components/round-stores';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { formatCount, formatDateDots, formatDateKo, formatKRW } from '@/lib/format';
@@ -133,6 +134,11 @@ export default function RoundScreen() {
 
       <SharingCard d={d} />
       <RankTable d={d} />
+      <RoundStores round={d.round} firstWinners={first.winners} />
+
+      <Link href={`/my?round=${d.round}`}>
+        <ThemedText type="linkPrimary">내 번호로 {d.round}회 당첨 확인 →</ThemedText>
+      </Link>
 
       <View style={styles.between}>
         {prev ? (

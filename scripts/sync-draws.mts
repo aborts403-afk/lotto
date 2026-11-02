@@ -1,9 +1,10 @@
 // Pull all draws from the API and write the build-time data the app and static pages use:
 //   - src/data/draws.json   compact rows, bundled into the app (web pages render with real content)
+//   - src/data/stores.json  winning-store rankings (/api/stores/summary)
 //   - public/sitemap.xml    every page, for search engines
 //   - public/robots.txt
 // Runs before every web build (npm run build:web).
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { SITE_URL } from '../src/lib/site';
@@ -19,7 +20,9 @@ type ApiDraw = {
 };
 
 const root = resolve(import.meta.dirname, '..');
-const res = await fetch(`${SITE_URL}/api/draws`, { headers: { 'User-Agent': 'lotto-note-build' } });
+// API_BASE=http://localhost:8787 to build from `wrangler dev` instead of production.
+const API_BASE = process.env.API_BASE ?? SITE_URL;
+const res = await fetch(`${API_BASE}/api/draws`, { headers: { 'User-Agent': 'lotto-note-build' } });
 if (!res.ok) throw new Error(`GET /api/draws failed: HTTP ${res.status}`);
 const draws = ((await res.json()) as ApiDraw[]).sort((a, b) => a.round - b.round);
 if (draws.length === 0 || draws[draws.length - 1].round !== draws.length) {
@@ -40,12 +43,27 @@ const rows = draws.map((d) => [
 ]);
 writeFileSync(resolve(root, 'src/data/draws.json'), `[\n${rows.map((r) => JSON.stringify(r)).join(',\n')}\n]\n`);
 
+// Winning stores. If the endpoint is unavailable (e.g. the Worker that serves it is not deployed yet),
+// keep the committed file rather than failing the whole build.
+const storesFile = resolve(root, 'src/data/stores.json');
+const storesRes = await fetch(`${API_BASE}/api/stores/summary`, { headers: { 'User-Agent': 'lotto-note-build' } });
+if (storesRes.ok) {
+  writeFileSync(storesFile, `${JSON.stringify(await storesRes.json())}\n`);
+} else if (existsSync(storesFile)) {
+  console.warn(`GET /api/stores/summary failed (HTTP ${storesRes.status}); keeping the existing src/data/stores.json`);
+} else {
+  throw new Error(`GET /api/stores/summary failed: HTTP ${storesRes.status}`);
+}
+
 const latest = draws[draws.length - 1];
 const urls = [
   { loc: '/', lastmod: latest.drawDate, priority: '1.0' },
   { loc: '/round', lastmod: latest.drawDate, priority: '0.9' },
   { loc: '/generate', priority: '0.8' },
+  { loc: '/my', priority: '0.8' },
   { loc: '/stats', lastmod: latest.drawDate, priority: '0.8' },
+  { loc: '/stats/stores', lastmod: latest.drawDate, priority: '0.7' },
+  ...Array.from({ length: 45 }, (_, i) => ({ loc: `/stats/${i + 1}`, lastmod: latest.drawDate, priority: '0.6' })),
   ...draws
     .slice()
     .reverse()
