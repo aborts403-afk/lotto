@@ -11,6 +11,7 @@ import { LottoBall, LottoBalls } from '@/components/lotto-ball';
 import { PendingRoundText, usePendingRound } from '@/components/next-draw';
 import { NumberPicker } from '@/components/number-picker';
 import { Page } from '@/components/page';
+import { TabStrip } from '@/components/tab-strip';
 import { ThemedText } from '@/components/themed-text';
 import { RANK_COLORS } from '@/components/ticket-result';
 import { Radius, Spacing } from '@/constants/theme';
@@ -173,10 +174,9 @@ function CheckTab({
     else if (numbers.length < 6) setBoth([...numbers, n]);
     else onSaved('번호는 6개까지 고를 수 있어요');
   };
-  const save = async () => {
-    const added = await addTickets(round, [sorted], 'manual');
-    onSaved(added ? `${round}회 번호로 저장했어요` : '이미 저장한 번호예요');
-    if (added) setBoth([]);
+  const save = async (target: number) => {
+    const added = await addTickets(target, [sorted], 'manual');
+    onSaved(added ? `${target}회 번호로 저장했어요` : `이미 ${target}회에 저장한 번호예요`);
   };
 
   return (
@@ -212,7 +212,27 @@ function CheckTab({
             </ThemedText>
           </View>
         ) : null}
-        {numbers.length === 6 && <Button label="내 번호에 저장" icon="bookmark" variant="primary" size="lg" onPress={save} />}
+        {numbers.length === 6 &&
+          (draw ? (
+            <View style={styles.saveRow}>
+              <Button
+                label={`${round}회 번호로 저장`}
+                icon="bookmark"
+                variant="tonal"
+                onPress={() => save(round)}
+                style={styles.grow}
+              />
+              <Button
+                label={`${nextRound}회(다음 추첨)로 저장`}
+                icon="bookmark"
+                variant="primary"
+                onPress={() => save(nextRound)}
+                style={styles.grow}
+              />
+            </View>
+          ) : (
+            <Button label={`${round}회 번호로 저장`} icon="bookmark" variant="primary" size="lg" onPress={() => save(round)} />
+          ))}
         <TextInput
           value={text}
           onChangeText={(v) => {
@@ -403,7 +423,7 @@ function SavedTab({ onCheck }: { onCheck: () => void }) {
           산 번호나 뽑은 번호를 저장해 두면{'\n'}추첨이 끝난 뒤 당첨 결과를 바로 보여 드려요.
         </ThemedText>
         <View style={styles.emptyActions}>
-          <Button label="번호 입력하기" variant="primary" onPress={onCheck} style={styles.flex} />
+          <Button label="당첨 확인에서 입력" variant="primary" onPress={onCheck} style={styles.flex} />
           <Button label="번호 뽑기" variant="tonal" onPress={() => router.push('/generate')} style={styles.flex} />
         </View>
       </Card>
@@ -473,24 +493,17 @@ export default function MyScreen() {
 
   return (
     <Page
-      title={current === 'check' ? '당첨 확인' : '내 번호'}
-      subtitle={
-        current === 'check'
-          ? '산 번호를 넣으면 몇 등인지 바로 보여요'
-          : (ready && totals) || '산 번호를 모아 두면 결과를 자동으로 확인해요'
-      }
-      toast={toast}
-      right={
-        ready ? (
-          current === 'check' ? (
-            tickets.length > 0 ? (
-              <Button label="저장한 번호" size="sm" variant="tonal" onPress={() => setTab('saved')} />
-            ) : null
-          ) : (
-            <Button label="번호 입력" icon="plus" size="sm" variant="primary" onPress={() => setTab('check')} />
-          )
-        ) : null
-      }>
+      title="내 번호"
+      subtitle={(ready && current === 'saved' && totals) || '산 번호를 저장하고 당첨을 확인하세요'}
+      toast={toast}>
+      <TabStrip
+        items={[
+          { value: 'saved', label: ready && tickets.length ? `저장한 번호 ${tickets.length}` : '저장한 번호' },
+          { value: 'check', label: '당첨 확인' },
+        ]}
+        value={current}
+        onChange={setTab}
+      />
       {/* Saved tickets and the latest draw depend on the device, so the content renders after hydration on web. */}
       {!ready ? (
         <Card style={styles.loading}>
@@ -527,6 +540,8 @@ const styles = StyleSheet.create({
   groupTitle: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   groupDraw: { borderRadius: Radius.md, padding: 12, gap: 6 },
   ticket: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 10 },
+  saveRow: { gap: Spacing.two },
+  grow: { flex: 1 },
   ticketBody: { flex: 1, gap: 6 },
   rankPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignSelf: 'flex-start' },
   rankText: { fontWeight: '800' },

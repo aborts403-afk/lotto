@@ -134,7 +134,7 @@ export default function RoundScreen() {
 
   if (!d) {
     return (
-      <Page title="회차를 찾을 수 없어요" back={{ href: '/round', label: '회차 목록' }}>
+      <Page title="회차를 찾을 수 없어요" back={{ href: '/round', label: '회차 결과' }}>
         <Button label="전체 회차 보기" onPress={() => router.push('/round')} />
       </Page>
     );
@@ -148,7 +148,7 @@ export default function RoundScreen() {
     <Page
       title={`${d.round}회 당첨번호`}
       subtitle={`${formatDateKo(d.drawDate)} 추첨`}
-      back={{ href: '/round', label: '회차 목록' }}
+      back={{ href: '/round', label: '회차 결과' }}
       right={<RoundNav prev={prev?.round} next={next?.round} />}>
       <DrawHero
         draw={d}

@@ -2,8 +2,6 @@
 // /api/stores/summary; the shape is defined in worker/src/stores.ts).
 import raw from '@/data/stores.json';
 
-import { LATEST_DRAW } from './draws';
-
 export type StoreRow = {
   id: string;
   name: string;
@@ -88,8 +86,12 @@ export function regionRank(region: string): number {
   return i < 0 ? REGION_ORDER.length - 1 : i;
 }
 
-// Winning stores of rounds up to this one are bundled as static files at build time
-// (public/data/stores/<round>.json, written by scripts/sync-draws.mts); later rounds can still change,
-// so they come from the API. Keep STORE_RECENT_ROUNDS in sync with the build script and the Worker.
+// Winning stores of rounds up to `latestRound - STORE_RECENT_ROUNDS` are final and served as static files
+// (public/data/stores/<round>.json, written by scripts/sync-draws.mts at every build); later rounds can still
+// change, so they come from the API. Pass the newest known round (useLatestDraw), not the bundled one: an
+// installed app keeps its bundle for weeks while the site keeps adding static files.
+// Keep STORE_RECENT_ROUNDS in sync with the build script and the Worker.
 const STORE_RECENT_ROUNDS = 4;
-export const STATIC_STORES_THROUGH = LATEST_DRAW.round - STORE_RECENT_ROUNDS;
+export function staticStoresThrough(latestRound: number): number {
+  return latestRound - STORE_RECENT_ROUNDS;
+}

@@ -8,8 +8,9 @@ import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { useLatestDraw } from '@/hooks/use-latest-draw';
 import { useTheme } from '@/hooks/use-theme';
-import { normalizeRegion, regionRank, STATIC_STORES_THROUGH, type WinningTicket } from '@/lib/lotto/stores';
+import { normalizeRegion, regionRank, staticStoresThrough, type WinningTicket } from '@/lib/lotto/stores';
 import { SITE_URL } from '@/lib/site';
 
 export const FIRST_ROUND_WITH_STORES = 262;
@@ -22,9 +23,9 @@ async function getJson(url: string): Promise<WinningTicket[]> {
 
 // Finalized rounds come from the static file made at build time (no Worker request, no D1 read);
 // recent rounds, or a missing file, from the API. On web the file is on the same origin.
-function loadTickets(round: number): Promise<WinningTicket[]> {
+function loadTickets(round: number, latestRound: number): Promise<WinningTicket[]> {
   const api = () => getJson(`${SITE_URL}/api/draws/${round}/stores`);
-  if (round > STATIC_STORES_THROUGH) return api();
+  if (round > staticStoresThrough(latestRound)) return api();
   const base = Platform.OS === 'web' ? '' : SITE_URL;
   return getJson(`${base}/data/stores/${round}.json`).catch(api);
 }
@@ -74,6 +75,7 @@ function TicketList({ tickets }: { tickets: WinningTicket[] }) {
 // with a region filter and a Naver Map link per store.
 export function RoundStores({ round, firstWinners }: { round: number; firstWinners: number }) {
   const hydrated = useHydrated();
+  const latestRound = useLatestDraw().round;
   // Result for the round it was loaded for; anything else (first render, round changed) is "loading".
   const [loaded, setLoaded] = useState<State | null>(null);
   const state = loaded?.round === round ? loaded : { status: 'loading' as const };
@@ -83,12 +85,14 @@ export function RoundStores({ round, firstWinners }: { round: number; firstWinne
   useEffect(() => {
     if (!hydrated || round < FIRST_ROUND_WITH_STORES) return;
     let cancelled = false;
-    loadTickets(round)
+    loadTickets(round, latestRound)
       .then((tickets) => !cancelled && setLoaded({ round, status: 'done', tickets }))
       .catch(() => !cancelled && setLoaded({ round, status: 'error' }));
     return () => {
       cancelled = true;
     };
+    // latestRound only picks the source (static file or API), so a newer round arriving does not reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, round]);
 
   const tickets = useMemo(() => (loaded?.round === round && loaded.status === 'done' ? loaded.tickets : []), [loaded, round]);

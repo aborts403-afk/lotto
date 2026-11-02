@@ -7,6 +7,7 @@ import {
   latestRound,
   replaceTicketsStmts,
   setMeta,
+  setMetaStmt,
   ticketToApi,
   toApi,
   upsertDrawStmt,
@@ -43,12 +44,18 @@ async function syncRecentStores(env: Env): Promise<number[]> {
   const synced: number[] = [];
   for (const r of results) {
     if (r.w1 === r.t1 && r.w2 === r.t2) continue;
+    let changed = false;
     for (const rank of [1, 2] as const) {
       const tickets = await fetchWinningTickets(r.round, rank);
       if (tickets.length === 0) continue; // not published yet; keep what we have
+      // Same count as stored = the source has not added anything since the last run. Without this, a round
+      // whose list never matches the winner count would be rewritten, and the store ranking (~200k rows
+      // read) recomputed, on every cron run.
+      if (tickets.length === (rank === 1 ? r.t1 : r.t2)) continue;
       await env.DB.batch(replaceTicketsStmts(env.DB, r.round, rank, tickets));
+      changed = true;
     }
-    synced.push(r.round);
+    if (changed) synced.push(r.round);
   }
   return synced;
 }
@@ -76,15 +83,15 @@ export async function collect(env: Env): Promise<{ added: number[]; storesSynced
     // The store ranking reads every winning ticket (~200k rows), so it is computed here, only when the
     // stores changed, and served from meta.
     if (storesSynced.length || !(await getMetaValue(env.DB, STORES_SUMMARY_KEY))) await refreshStoresSummary(env.DB);
-    await setMeta(env.DB, 'last_success_at', now);
-    await setMeta(env.DB, 'last_error', '');
     added.sort((a, b) => a - b);
-    if (added.length) await setMeta(env.DB, 'last_added', added.join(','));
-    if (storesSynced.length) await setMeta(env.DB, 'last_stores_synced', `${now} ${storesSynced.join(',')}`);
+    const meta = [setMetaStmt(env.DB, 'last_success_at', now), setMetaStmt(env.DB, 'last_error', '')];
+    if (added.length) meta.push(setMetaStmt(env.DB, 'last_added', added.join(',')));
+    if (storesSynced.length) meta.push(setMetaStmt(env.DB, 'last_stores_synced', `${now} ${storesSynced.join(',')}`));
     if (unknownKeysSeen.size) {
-      await setMeta(env.DB, 'unknown_fields', [...unknownKeysSeen].sort().join(','));
+      meta.push(setMetaStmt(env.DB, 'unknown_fields', [...unknownKeysSeen].sort().join(',')));
       console.warn(JSON.stringify({ event: 'unknown_fields', fields: [...unknownKeysSeen] }));
     }
+    await env.DB.batch(meta);
     console.log(JSON.stringify({ event: 'collect', added, storesSynced }));
     return { added, storesSynced };
   } catch (err) {
@@ -96,6 +103,25 @@ export async function collect(env: Env): Promise<{ added: number[]; storesSynced
 }
 
 const CORS = { 'Access-Control-Allow-Origin': '*' };
+
+// Cloudflare rewrites Cache-Control on responses read back from the edge cache to the zone's Browser Cache
+// TTL (default 4 hours), which would let browsers and the app keep /api/draws for hours on draw night.
+// The original value is stored alongside the cached copy and put back on every hit.
+const ORIGIN_CACHE_CONTROL = 'X-Origin-Cache-Control';
+
+function forCache(res: Response): Response {
+  const copy = new Response(res.clone().body, res);
+  copy.headers.set(ORIGIN_CACHE_CONTROL, res.headers.get('Cache-Control') ?? '');
+  return copy;
+}
+
+function fromCache(hit: Response): Response {
+  const res = new Response(hit.body, hit);
+  const original = res.headers.get(ORIGIN_CACHE_CONTROL);
+  if (original) res.headers.set('Cache-Control', original);
+  res.headers.delete(ORIGIN_CACHE_CONTROL);
+  return res;
+}
 
 // `maxAge` is both the browser cache time and how long the response stays in the Cloudflare edge cache
 // (see fetch below); 0 = not cached.
@@ -134,6 +160,14 @@ function cacheKey(url: URL): string {
   return `${url.origin}${path}`;
 }
 
+// Highest round that can exist right now (round 1 was drawn 2002-12-07, weekly; +1 for a delayed or
+// rescheduled draw). Larger round numbers are answered without querying D1.
+const ROUND1_DRAW = Date.UTC(2002, 11, 7, 11, 0);
+function maxPossibleRound(): number {
+  return Math.floor((Date.now() - ROUND1_DRAW) / (7 * DAY * 1000)) + 2;
+}
+const validRound = (round: number) => round >= 1 && round <= maxPossibleRound();
+
 async function handleApi(url: URL, env: Env): Promise<Response> {
   const path = url.pathname.replace(/\/+$/, '');
 
@@ -150,6 +184,7 @@ async function handleApi(url: URL, env: Env): Promise<Response> {
 
   const one = path.match(/^\/api\/draws\/(\d+)$/);
   if (one) {
+    if (!validRound(Number(one[1]))) return json({ error: 'not found' }, { status: 404, maxAge: DAY });
     const row = await env.DB.prepare('SELECT * FROM draws WHERE round = ?').bind(Number(one[1])).first<DrawRow>();
     return row ? json(toApi(row), { maxAge: 3600 }) : json({ error: 'not found' }, { status: 404 });
   }
@@ -157,6 +192,9 @@ async function handleApi(url: URL, env: Env): Promise<Response> {
   const stores = path.match(/^\/api\/draws\/(\d+)\/stores$/);
   if (stores) {
     const round = Number(stores[1]);
+    // No store lists before FIRST_ROUND_WITH_STORES; nothing to read.
+    if (!validRound(round)) return json({ error: 'not found' }, { status: 404, maxAge: DAY });
+    if (round < FIRST_ROUND_WITH_STORES) return json([], { maxAge: DAY });
     const { results } = await env.DB.prepare(
       `SELECT round, rank, seq, store_id, store_name, address, region, pick_type, lat, lng, phone, status
          FROM winning_tickets WHERE round = ? ORDER BY rank, seq`,
@@ -201,7 +239,8 @@ async function handleApi(url: URL, env: Env): Promise<Response> {
     const stale = daysSince > 8;
     return json(
       { ok: !stale && !meta.last_error, stale, latestRound: row?.round ?? null, latestDrawDate: row?.draw_date ?? null, ...meta },
-      { status: stale ? 503 : 200 },
+      // Short cache so a frequent uptime monitor does not query D1 on every check (503s are not cached).
+      { status: stale ? 503 : 200, maxAge: stale ? 0 : 60 },
     );
   }
 
@@ -216,14 +255,15 @@ export default {
         return new Response(null, { headers: { ...CORS, 'Access-Control-Allow-Methods': 'GET' } });
       if (request.method !== 'GET') return json({ error: 'method not allowed' }, { status: 405 });
       // Edge cache (per Cloudflare data center): repeated requests are answered without touching D1.
-      // Only successful responses with a max-age are stored; /api/health is never cached (no-store).
+      // Responses with a max-age are stored (200s, and 404s for rounds that cannot exist); no-store ones are not.
       const cache = caches.default;
       const key = new Request(cacheKey(url));
       const hit = await cache.match(key);
-      if (hit) return hit;
+      if (hit) return fromCache(hit);
       try {
         const res = await handleApi(url, env);
-        if (res.ok && res.headers.get('Cache-Control')?.includes('max-age')) ctx.waitUntil(cache.put(key, res.clone()));
+        if ((res.ok || res.status === 404) && res.headers.get('Cache-Control')?.includes('max-age'))
+          ctx.waitUntil(cache.put(key, forCache(res)));
         return res;
       } catch (err) {
         console.error(err);

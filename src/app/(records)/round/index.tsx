@@ -10,6 +10,7 @@ import { DrawNumbers } from '@/components/draw-numbers';
 import { Icon } from '@/components/icon';
 import { NumberPicker } from '@/components/number-picker';
 import { PageHeader } from '@/components/page';
+import { RecordsTabs } from '@/components/tab-strip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -80,7 +81,8 @@ export default function RoundListScreen() {
 
   const header = (
     <View style={styles.header}>
-      <PageHeader title="회차별 당첨번호" subtitle={`1회부터 ${LATEST_DRAW.round}회까지`} />
+      <PageHeader title="기록" subtitle={`회차 결과 · 1회부터 ${LATEST_DRAW.round}회까지`} />
+      <RecordsTabs />
       <View style={styles.searchRow}>
         <View style={[styles.search, { backgroundColor: theme.backgroundElement }]}>
           <Icon name="search" size={18} color={theme.textTertiary} />
@@ -164,7 +166,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     gap: 10,
   },
-  header: { gap: 12, marginBottom: 6 },
+  // Same spacing as <Page>: 16 between header blocks; 6 + the list's 10 gap = 16 before the first row.
+  header: { gap: Spacing.three, marginBottom: 6 },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   flex: { flex: 1 },
   searchRow: { flexDirection: 'row', gap: Spacing.two },

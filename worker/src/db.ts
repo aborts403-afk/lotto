@@ -82,11 +82,17 @@ export async function latestRound(db: D1Database): Promise<number> {
   return row?.r ?? 0;
 }
 
+// The WHERE skips the row write when the value is unchanged (D1 bills rows written).
+export function setMetaStmt(db: D1Database, key: string, value: string): D1PreparedStatement {
+  return db
+    .prepare(
+      'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE value != excluded.value',
+    )
+    .bind(key, value);
+}
+
 export async function setMeta(db: D1Database, key: string, value: string): Promise<void> {
-  await db
-    .prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-    .bind(key, value)
-    .run();
+  await setMetaStmt(db, key, value).run();
 }
 
 // Large cached values kept in meta (not status), left out of getMeta / the health response.

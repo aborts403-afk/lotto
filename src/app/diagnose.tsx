@@ -1,18 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import type { Metadata } from 'expo-router/server';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card, Notice, Pill, Section } from '@/components/card';
 import { LottoBalls } from '@/components/lotto-ball';
 import { NumberEntry } from '@/components/number-entry';
+import { SavedNumbersPicker } from '@/components/saved-numbers-picker';
 import { Page } from '@/components/page';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useAllDraws, useLatestDraw } from '@/hooks/use-latest-draw';
-import { addTickets, useMyTickets } from '@/hooks/use-my-tickets';
+import { addTickets } from '@/hooks/use-my-tickets';
 import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
 import { formatKRWShort } from '@/lib/format';
@@ -173,48 +174,22 @@ function Result({ numbers, nextRound, onToast }: { numbers: Combo; nextRound: nu
 
 export default function DiagnoseScreen() {
   const hydrated = useHydrated();
-  const theme = useTheme();
   const params = useLocalSearchParams<{ numbers?: string }>();
   const [numbers, setNumbers] = useState<number[] | null>(null);
   const [toast, setToast] = useToast();
   const nextRound = useLatestDraw().round + 1;
-  const { tickets } = useMyTickets();
   // The static HTML has no query string, so a prefilled ?numbers= is read only after hydration.
   const current = useMemo(
     () => numbers ?? (hydrated && params.numbers ? parseNumbers(params.numbers) : []),
     [numbers, hydrated, params.numbers],
   );
   const sorted = useMemo(() => [...current].sort((a, b) => a - b), [current]);
-  const recent = useMemo(() => {
-    const seen = new Set<string>();
-    return tickets.filter((t) => !seen.has(t.numbers.join(',')) && seen.add(t.numbers.join(','))).slice(0, 4);
-  }, [tickets]);
 
   return (
     <Page title="번호 진단" subtitle="1등이 되면 몇 명과 나누게 될까요?" toast={toast}>
       <Card>
         <NumberEntry numbers={current} onChange={setNumbers} onLimit={() => setToast('번호는 6개까지 고를 수 있어요')} />
-        {current.length < 6 && hydrated && recent.length > 0 && (
-          <View style={styles.recent}>
-            <ThemedText type="caption" themeColor="textTertiary">
-              저장한 번호에서 고르기
-            </ThemedText>
-            {recent.map((t) => (
-              <Pressable
-                key={t.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${t.numbers.join(' ')} 진단하기`}
-                onPress={() => setNumbers([...t.numbers])}
-                style={({ pressed }) => [
-                  styles.recentRow,
-                  { backgroundColor: theme.backgroundSelected },
-                  pressed && styles.pressed,
-                ]}>
-                <LottoBalls numbers={t.numbers} size={26} />
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {current.length < 6 && hydrated && <SavedNumbersPicker onPick={setNumbers} verb="진단하기" />}
       </Card>
 
       {hydrated && sorted.length === 6 ? (
@@ -247,6 +222,4 @@ const styles = StyleSheet.create({
   tileAmount: { fontSize: 20, lineHeight: 28, fontWeight: '900' },
   altRow: { gap: Spacing.two },
   altActions: { flexDirection: 'row', gap: Spacing.two },
-  recent: { gap: Spacing.two },
-  recentRow: { borderRadius: Radius.md, padding: 10 },
 });

@@ -1,21 +1,22 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import type { Metadata } from 'expo-router/server';
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, Share, StyleSheet, View } from 'react-native';
+import { Platform, Share, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card, Notice } from '@/components/card';
 import { Chips } from '@/components/chips';
 import { HERO_BLUE } from '@/components/draw-hero';
-import { LottoBall, LottoBalls } from '@/components/lotto-ball';
+import { LottoBall } from '@/components/lotto-ball';
 import { NumberEntry } from '@/components/number-entry';
+import { SavedNumbersPicker } from '@/components/saved-numbers-picker';
 import { Page } from '@/components/page';
+import { RecordsTabs } from '@/components/tab-strip';
 import { ThemedText } from '@/components/themed-text';
 import { RANK_COLORS } from '@/components/ticket-result';
 import { Radius, Spacing } from '@/constants/theme';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useAllDraws } from '@/hooks/use-latest-draw';
-import { useMyTickets } from '@/hooks/use-my-tickets';
 import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
 import { formatCount, formatKRW } from '@/lib/format';
@@ -162,52 +163,23 @@ function Result({ numbers, period, onToast }: { numbers: number[]; period: Perio
 
 export default function SimulatorScreen() {
   const hydrated = useHydrated();
-  const theme = useTheme();
   const params = useLocalSearchParams<{ numbers?: string }>();
   const [numbers, setNumbers] = useState<number[] | null>(null);
   const [period, setPeriod] = useState<Period>('1040');
   const [toast, setToast] = useToast();
-  const { tickets } = useMyTickets();
   // The static HTML has no query string, so a prefilled ?numbers= is read only after hydration.
   const current = useMemo(
     () => numbers ?? (hydrated && params.numbers ? parseNumbers(params.numbers) : []),
     [numbers, hydrated, params.numbers],
   );
   const sorted = useMemo(() => [...current].sort((a, b) => a - b), [current]);
-  const recent = useMemo(() => {
-    const seen = new Set<string>();
-    return tickets.filter((t) => !seen.has(t.numbers.join(',')) && seen.add(t.numbers.join(','))).slice(0, 4);
-  }, [tickets]);
 
   return (
-    <Page
-      title="그때부터 샀다면"
-      subtitle="실제 역대 당첨 결과로 계산해요"
-      back={{ href: '/stats', label: '기록' }}
-      toast={toast}>
+    <Page title="기록" subtitle="시뮬레이션 · 같은 번호를 매주 샀다면 얼마를 받았을까" toast={toast}>
+      <RecordsTabs />
       <Card>
         <NumberEntry numbers={current} onChange={setNumbers} onLimit={() => setToast('번호는 6개까지 고를 수 있어요')} />
-        {current.length < 6 && hydrated && recent.length > 0 && (
-          <View style={styles.recent}>
-            <ThemedText type="caption" themeColor="textTertiary">
-              저장한 번호에서 고르기
-            </ThemedText>
-            {recent.map((t) => (
-              <Pressable
-                key={t.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${t.numbers.join(' ')}로 계산하기`}
-                onPress={() => setNumbers([...t.numbers])}
-                style={({ pressed }) => [
-                  styles.recentRow,
-                  { backgroundColor: theme.backgroundSelected },
-                  pressed && styles.pressed,
-                ]}>
-                <LottoBalls numbers={t.numbers} size={26} />
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {current.length < 6 && hydrated && <SavedNumbersPicker onPick={setNumbers} verb="로 계산하기" />}
       </Card>
 
       <Chips options={PERIODS.map((p) => ({ value: p.value, label: p.label }))} value={period} onChange={setPeriod} scroll />
@@ -236,7 +208,5 @@ const styles = StyleSheet.create({
   rankNote: { marginLeft: 'auto' },
   row: { flexDirection: 'row', gap: Spacing.two },
   grow: { flex: 1 },
-  recent: { gap: Spacing.two },
-  recentRow: { borderRadius: Radius.md, padding: 10 },
   pressed: { opacity: 0.7 },
 });

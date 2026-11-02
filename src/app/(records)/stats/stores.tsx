@@ -9,6 +9,7 @@ import { Icon } from '@/components/icon';
 import { Chips } from '@/components/chips';
 import { MapButton } from '@/components/map-button';
 import { Page } from '@/components/page';
+import { RecordsTabs } from '@/components/tab-strip';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -114,9 +115,9 @@ export default function StoresScreen() {
 
   return (
     <Page
-      title="1등 당첨 판매점"
-      subtitle={`${STORES.fromRound}~${STORES.toRound}회 1등 ${formatCount(STORES.firstTickets)}장 기준`}
-      back={{ href: '/stats', label: '번호 통계' }}>
+      title="기록"
+      subtitle={`1등 판매점 · ${STORES.fromRound}~${STORES.toRound}회 1등 ${formatCount(STORES.firstTickets)}장 기준`}>
+      <RecordsTabs />
       <Card style={styles.summary}>
         <View style={styles.summaryItem}>
           <ThemedText type="caption" themeColor="textTertiary">
