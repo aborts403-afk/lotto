@@ -51,6 +51,12 @@
         "projectId": "27b2170d-1b02-4098-b19c-448afad41fdd"
       }
     },
-    "owner": "aborts.403"
+    "owner": "aborts.403",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/27b2170d-1b02-4098-b19c-448afad41fdd"
+    }
   }
 }
