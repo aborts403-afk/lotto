@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import type { Metadata } from 'expo-router/server';
 import { useMemo, useState } from 'react';
@@ -190,9 +191,7 @@ export default function HomeScreen() {
     <Page>
       {!wide && (
         <View style={styles.brand}>
-          <View style={[styles.logo, { backgroundColor: HERO_BLUE }]}>
-            <ThemedText style={styles.logoText}>1</ThemedText>
-          </View>
+          <Image source={require('@/assets/images/logo-96.png')} style={styles.logo} accessibilityIgnoresInvertColors />
           <ThemedText style={styles.brandText}>{SITE_NAME}</ThemedText>
         </View>
       )}
@@ -266,8 +265,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.8 },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  logo: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  logoText: { color: '#FFFFFF', fontSize: 17, lineHeight: 22, fontWeight: '900' },
+  logo: { width: 30, height: 30, borderRadius: 9 },
   brandText: { fontSize: 19, lineHeight: 26, fontWeight: '900', letterSpacing: -0.5 },
   hero: { backgroundColor: HERO_BLUE, borderRadius: Radius.lg + 4, padding: 20, paddingTop: 22, gap: 14 },
   heroTitle: { fontSize: 28, lineHeight: 36, fontWeight: '900', letterSpacing: -1 },
