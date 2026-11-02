@@ -8,7 +8,7 @@ import { Card, Pill } from '@/components/card';
 import { DrawNumbers } from '@/components/draw-numbers';
 import { Icon } from '@/components/icon';
 import { LottoBall, LottoBalls } from '@/components/lotto-ball';
-import { NextDrawCountdownText } from '@/components/next-draw';
+import { PendingRoundText, usePendingRound } from '@/components/next-draw';
 import { NumberPicker } from '@/components/number-picker';
 import { Page } from '@/components/page';
 import { Segmented } from '@/components/segmented';
@@ -89,7 +89,7 @@ function RoundSelector({
           <ThemedText type="heading">회</ThemedText>
         </View>
         <ThemedText type="caption" themeColor="textTertiary">
-          {draw ? `${formatDateDots(draw.drawDate)} 추첨` : '추첨 전'}
+          {draw ? `${formatDateDots(draw.drawDate)} 추첨` : '결과 없음'}
         </ThemedText>
       </View>
       <Button
@@ -190,9 +190,7 @@ function CheckTab({
           </View>
         ) : (
           <View style={[styles.winning, { backgroundColor: theme.backgroundSelected }]}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-              아직 추첨 전이에요. 저장해 두면 추첨 뒤 결과를 알려 드려요.
-            </ThemedText>
+            <PendingRoundText round={round} />
           </View>
         )}
       </Card>
@@ -208,10 +206,10 @@ function CheckTab({
         ) : numbers.length === 6 ? (
           <View style={[styles.banner, { backgroundColor: theme.primarySoft }]}>
             <ThemedText type="smallBold" style={{ color: theme.primary }}>
-              {round}회 추첨 전이에요
+              {round}회 결과가 아직 없어요
             </ThemedText>
             <ThemedText type="caption" themeColor="textSecondary">
-              저장해 두면 토요일 추첨 뒤 결과가 내 번호에 나와요.
+              저장해 두면 결과가 나오는 대로 내 번호에 표시돼요.
             </ThemedText>
           </View>
         ) : null}
@@ -275,7 +273,17 @@ function TicketLine({ ticket, draw, onRemove, last }: { ticket: MyTicket; draw?:
   );
 }
 
-function RoundGroup({ group, nextRound, onRemove }: { group: Group; nextRound: number; onRemove: (t: MyTicket[]) => void }) {
+function PendingPill({ round }: { round: number }) {
+  const theme = useTheme();
+  const { phase } = usePendingRound(round);
+  return phase === 'before' ? (
+    <Pill label="추첨 전" color={theme.primary} soft />
+  ) : (
+    <Pill label="결과 확인 중" color={theme.warning} soft />
+  );
+}
+
+function RoundGroup({ group, onRemove }: { group: Group; onRemove: (t: MyTicket[]) => void }) {
   const theme = useTheme();
   const { round, draw, tickets } = group;
   const won = draw ? tickets.map((t) => checkTicket(t.numbers, draw)).filter((r) => r.rank) : [];
@@ -290,7 +298,7 @@ function RoundGroup({ group, nextRound, onRemove }: { group: Group; nextRound: n
           {draw && <Icon name="chevronRight" size={16} color={theme.textTertiary} />}
         </Pressable>
         {!draw ? (
-          <Pill label="추첨 전" color={theme.primary} soft />
+          <PendingPill round={round} />
         ) : best ? (
           <Pill label={`${won.length}장 당첨 · ${formatKRW(prize)}`} color={RANK_COLORS[best as 1]} soft />
         ) : (
@@ -304,12 +312,8 @@ function RoundGroup({ group, nextRound, onRemove }: { group: Group; nextRound: n
           </ThemedText>
           <DrawNumbers numbers={draw.numbers} bonus={draw.bonus} size={24} />
         </View>
-      ) : round === nextRound ? (
-        <NextDrawCountdownText />
       ) : (
-        <ThemedText type="caption" themeColor="textTertiary">
-          결과를 기다리는 중이에요
-        </ThemedText>
+        <PendingRoundText round={round} />
       )}
       <View>
         {tickets.map((t, i) => (
@@ -332,7 +336,6 @@ function SavedTab({ onCheck }: { onCheck: () => void }) {
   const theme = useTheme();
   const { tickets } = useMyTickets();
   const lookup = useDrawLookup();
-  const nextRound = useLatestDraw().round + 1;
   const [undo, setUndo] = useState<MyTicket[] | null>(null);
 
   const groups = useMemo(() => {
@@ -437,7 +440,7 @@ function SavedTab({ onCheck }: { onCheck: () => void }) {
       )}
 
       {groups.map((g) => (
-        <RoundGroup key={g.round} group={g} nextRound={nextRound} onRemove={remove} />
+        <RoundGroup key={g.round} group={g} onRemove={remove} />
       ))}
 
       <ThemedText type="caption" themeColor="textTertiary" style={styles.center}>

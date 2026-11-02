@@ -2,6 +2,8 @@
 // /api/stores/summary; the shape is defined in worker/src/stores.ts).
 import raw from '@/data/stores.json';
 
+import { LATEST_DRAW } from './draws';
+
 export type StoreRow = {
   id: string;
   name: string;
@@ -85,3 +87,9 @@ export function regionRank(region: string): number {
   const i = REGION_ORDER.indexOf(region);
   return i < 0 ? REGION_ORDER.length - 1 : i;
 }
+
+// Winning stores of rounds up to this one are bundled as static files at build time
+// (public/data/stores/<round>.json, written by scripts/sync-draws.mts); later rounds can still change,
+// so they come from the API. Keep STORE_RECENT_ROUNDS in sync with the build script and the Worker.
+const STORE_RECENT_ROUNDS = 4;
+export const STATIC_STORES_THROUGH = LATEST_DRAW.round - STORE_RECENT_ROUNDS;

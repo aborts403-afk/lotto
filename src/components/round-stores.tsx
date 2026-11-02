@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { Card, Pill, Section } from '@/components/card';
 import { Chips } from '@/components/chips';
@@ -9,10 +9,25 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useTheme } from '@/hooks/use-theme';
-import { normalizeRegion, regionRank, type WinningTicket } from '@/lib/lotto/stores';
+import { normalizeRegion, regionRank, STATIC_STORES_THROUGH, type WinningTicket } from '@/lib/lotto/stores';
 import { SITE_URL } from '@/lib/site';
 
 export const FIRST_ROUND_WITH_STORES = 262;
+
+async function getJson(url: string): Promise<WinningTicket[]> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(String(res.status));
+  return (await res.json()) as WinningTicket[]; // throws on an HTML fallback page, too
+}
+
+// Finalized rounds come from the static file made at build time (no Worker request, no D1 read);
+// recent rounds, or a missing file, from the API. On web the file is on the same origin.
+function loadTickets(round: number): Promise<WinningTicket[]> {
+  const api = () => getJson(`${SITE_URL}/api/draws/${round}/stores`);
+  if (round > STATIC_STORES_THROUGH) return api();
+  const base = Platform.OS === 'web' ? '' : SITE_URL;
+  return getJson(`${base}/data/stores/${round}.json`).catch(api);
+}
 
 const ALL = '전체';
 const UNKNOWN = '기타';
@@ -68,8 +83,7 @@ export function RoundStores({ round, firstWinners }: { round: number; firstWinne
   useEffect(() => {
     if (!hydrated || round < FIRST_ROUND_WITH_STORES) return;
     let cancelled = false;
-    fetch(`${SITE_URL}/api/draws/${round}/stores`)
-      .then((res) => (res.ok ? (res.json() as Promise<WinningTicket[]>) : Promise.reject(new Error(String(res.status)))))
+    loadTickets(round)
       .then((tickets) => !cancelled && setLoaded({ round, status: 'done', tickets }))
       .catch(() => !cancelled && setLoaded({ round, status: 'error' }));
     return () => {

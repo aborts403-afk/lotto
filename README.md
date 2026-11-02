@@ -13,8 +13,14 @@
 | `GET /api/draws?limit=N` | 회차 목록 (최신순, limit 생략 시 전체) |
 | `GET /api/draws/:round` | 특정 회차 |
 | `GET /api/draws/:round/stores` | 1·2등 당첨 판매점 |
-| `GET /api/stores/summary` | 판매점 순위 (전체 30곳, 지역별 15곳)와 지역별 1등 수. 광주·전남은 합쳐서 셉니다 |
+| `GET /api/stores/summary` | 판매점 순위 (전체 30곳, 지역별 15곳)와 지역별 1등 수. 광주·전남은 합쳐서 셉니다. 크론이 판매점을 갱신할 때 미리 계산해 `meta`에 저장해 둔 값 |
+| `GET /api/stores/tickets/:block` | 빌드용: `block*100`~`block*100+99`회의 1·2등 당첨 판매점 전체 |
 | `GET /api/health` | 수집 상태 (최신 회차가 8일 넘게 지나면 503) |
+
+### 캐시와 무료 플랜 한도
+- `/api/*` 응답은 Cloudflare 엣지 캐시(Cache API)에 담깁니다: 최신 회차·회차 목록 5분, 회차 1시간, 확정된 회차의 판매점 1일, 최근 4회차 판매점 10분, 판매점 요약 1시간. `/api/health`는 캐시하지 않습니다.
+- 캐시 키는 경로와 정규화한 `limit`만 씁니다 (`limit`은 10/60/520/전체로 올림). 쿼리 문자열을 바꿔 캐시를 우회할 수 없습니다.
+- 그래서 D1 읽기는 사용자 수가 아니라 캐시 만료 횟수에 비례합니다. 남는 한도는 Workers 무료 플랜의 하루 10만 요청(`/api/*`만 해당, 정적 파일은 제외)입니다.
 
 ## 당첨번호 수집
 - 출처: 동행복권 결과 페이지가 쓰는 JSON (`worker/src/dhlottery.ts`). 공식 공개 API가 아니라서 바뀔 수 있습니다.
@@ -57,6 +63,7 @@
 ## 통계와 판매점
 - `/stats`: 번호별 출현, 홀짝·고저, 합계 분포, 끝수, 연속 번호, 이월수, 많이 나온 번호 쌍. 이론값은 정확히 계산합니다. `npm run check:stats`로 점검합니다.
 - `/stats/:n`: 번호별 상세 (출현 간격, 같이 나온 번호, 사람들이 고르는 정도).
+- 회차별 판매점: 확정된 회차(최근 4회차 제외)는 빌드할 때 `public/data/stores/<회차>.json` 정적 파일로 만들어 Worker와 D1을 거치지 않고 내려받습니다 (git에는 올리지 않음). 최근 회차와 파일이 없는 경우는 `/api/draws/:round/stores`를 씁니다. 크론이 다시 확인하는 회차 수(`STORE_SYNC_RECENT_ROUNDS`)와 앱(`STATIC_STORES_THROUGH`), 빌드 스크립트의 값을 맞춰야 합니다.
 - `/stats/stores`: 빌드할 때 `/api/stores/summary`를 `src/data/stores.json`으로 받습니다. API를 못 받으면 커밋된 파일을 그대로 씁니다. 회차 상세의 판매점 목록은 화면에서 `/api/draws/:round/stores`를 불러옵니다.
 - 로컬에서 Worker로 빌드 데이터 받기: `API_BASE=http://localhost:8787 npx tsx scripts/sync-draws.mts`
 

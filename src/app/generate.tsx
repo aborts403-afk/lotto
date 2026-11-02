@@ -2,11 +2,12 @@ import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import type { Metadata } from 'expo-router/server';
 import { useMemo, useState } from 'react';
-import { Platform, Share, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card, Notice, Section } from '@/components/card';
 import { Chips } from '@/components/chips';
+import { Icon } from '@/components/icon';
 import { LottoBalls } from '@/components/lotto-ball';
 import { NumberPicker } from '@/components/number-picker';
 import { Page } from '@/components/page';
@@ -147,6 +148,24 @@ function modeDescription(mode: GenerateMode, draws: readonly Draw[]): string {
   }
 }
 
+// An applied condition shown above the results; the ✕ clears it.
+function ConditionChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label} 조건 해제`}
+      onPress={onRemove}
+      hitSlop={4}
+      style={({ pressed }) => [styles.condChip, { backgroundColor: theme.primarySoft }, pressed && styles.pressed]}>
+      <ThemedText type="caption" style={[styles.bold, { color: theme.primary }]}>
+        {label}
+      </ThemedText>
+      <Icon name="close" size={14} color={theme.primary} />
+    </Pressable>
+  );
+}
+
 function SetRow({ index, numbers, note, last }: { index: number; numbers: readonly number[]; note?: string; last: boolean }) {
   const theme = useTheme();
   return (
@@ -275,16 +294,18 @@ export default function GenerateScreen() {
     }
   };
 
-  const conditionCount =
-    (odd !== 'any' ? 1 : 0) + (sum !== 'any' ? 1 : 0) + (!isWheel && (fixed.length || excluded.length) ? 1 : 0);
-  const conditionSummary = [
-    !isWheel && fixed.length > 0 && `포함 ${fixed.join(', ')}`,
-    !isWheel && excluded.length > 0 && `제외 ${excluded.length}개`,
-    odd !== 'any' && ODDS.find((o) => o.value === odd)?.label,
-    sum !== 'any' && `합계 ${SUM_RANGE[0]}~${SUM_RANGE[1]}`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  // Conditions currently applied, each with a way to clear it. Fixed/excluded numbers are not used in the
+  // wheel mode (the candidate pool replaces them), so they are not listed there.
+  const listNumbers = (ns: number[]) => (ns.length <= 4 ? ns.join(', ') : `${ns.length}개`);
+  const activeConditions: { key: string; label: string; clear: () => void }[] = [
+    ...(!isWheel && fixed.length ? [{ key: 'fixed', label: `포함 ${listNumbers(fixed)}`, clear: () => setFixed([]) }] : []),
+    ...(!isWheel && excluded.length
+      ? [{ key: 'excluded', label: `제외 ${listNumbers(excluded)}`, clear: () => setExcluded([]) }]
+      : []),
+    ...(odd !== 'any' ? [{ key: 'odd', label: ODDS.find((o) => o.value === odd)!.label, clear: () => setOdd('any') }] : []),
+    ...(sum !== 'any' ? [{ key: 'sum', label: `합계 ${SUM_RANGE[0]}~${SUM_RANGE[1]}`, clear: () => setSum('any') }] : []),
+  ];
+  const clearAll = () => activeConditions.forEach((c) => c.clear());
 
   const waitingInput = hydrated && ((mode === 'phrase' && !phraseKey) || (isWheel && pool.length < 6));
 
@@ -335,6 +356,14 @@ export default function GenerateScreen() {
         <View style={styles.between}>
           <ThemedText type="heading">{MODES.find((m) => m.value === mode)?.title}</ThemedText>
         </View>
+        {activeConditions.length > 0 && (
+          <View style={styles.activeRow}>
+            {activeConditions.map((c) => (
+              <ConditionChip key={c.key} label={c.label} onRemove={c.clear} />
+            ))}
+            {activeConditions.length > 1 && <Button label="모두 해제" size="sm" variant="ghost" onPress={clearAll} />}
+          </View>
+        )}
         <Segmented options={[...COUNTS]} value={count} onChange={setCount} />
 
         {result?.error ? (
@@ -410,9 +439,7 @@ export default function GenerateScreen() {
       <Card>
         <Collapsible
           title={
-            conditionCount
-              ? `세부 조건 ${conditionCount}개 적용 중 · ${conditionSummary}`
-              : '세부 조건 (홀짝, 합계, 포함·제외 번호)'
+            activeConditions.length ? `세부 조건 ${activeConditions.length}개 적용 중` : '세부 조건 (홀짝, 합계, 포함·제외 번호)'
           }>
           <View style={styles.conditions}>
             <ThemedText type="caption" themeColor="textTertiary">
@@ -488,6 +515,17 @@ export default function GenerateScreen() {
 
 const styles = StyleSheet.create({
   block: { gap: 12 },
+  activeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  condChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 8,
+    borderRadius: 999,
+  },
+  pressed: { opacity: 0.6 },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
   row: { flexDirection: 'row', gap: Spacing.two },
   flex: { flex: 1, gap: 4 },

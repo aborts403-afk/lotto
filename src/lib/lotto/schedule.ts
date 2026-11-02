@@ -20,3 +20,9 @@ export function formatCountdown(ms: number): string {
   if (h > 0) return `${h}시간 ${m}분`;
   return `${m}분`;
 }
+
+// Draw time of a round, counted in weeks from a known draw (every round is one week apart).
+export function drawTimeOfRound(round: number, known: { round: number; drawDate: string }): Date {
+  const base = Date.parse(`${known.drawDate}T${String(DRAW_HOUR).padStart(2, '0')}:${String(DRAW_MINUTE).padStart(2, '0')}:00+09:00`);
+  return new Date(base + (round - known.round) * 7 * 86_400_000);
+}

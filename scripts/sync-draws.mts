@@ -1,10 +1,12 @@
 // Pull all draws from the API and write the build-time data the app and static pages use:
 //   - src/data/draws.json   compact rows, bundled into the app (web pages render with real content)
 //   - src/data/stores.json  winning-store rankings (/api/stores/summary)
+//   - public/data/stores/<round>.json  winning stores of each finalized round (served as static files,
+//     so viewing them does not use the Worker or D1; the app fetches recent rounds from the API)
 //   - public/sitemap.xml    every page, for search engines
 //   - public/robots.txt
 // Runs before every web build (npm run build:web).
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { SITE_URL } from '../src/lib/site';
@@ -55,6 +57,38 @@ if (storesRes.ok) {
   throw new Error(`GET /api/stores/summary failed: HTTP ${storesRes.status}`);
 }
 
+// Static winning-store files. Rounds whose lists the cron may still update (the last STORE_RECENT_ROUNDS)
+// are left to the API. Keep in sync with STORE_SYNC_RECENT_ROUNDS (worker) and STATIC_STORES_THROUGH (app).
+const FIRST_ROUND_WITH_STORES = 262;
+const STORE_RECENT_ROUNDS = 4;
+const TICKET_BLOCK = 100;
+const lastFinal = draws[draws.length - 1].round - STORE_RECENT_ROUNDS;
+const storesDir = resolve(root, 'public/data/stores');
+type Ticket = { round: number; phone?: unknown; [k: string]: unknown };
+const byRound = new Map<number, Ticket[]>();
+let blocksOk = true;
+for (let b = Math.floor(FIRST_ROUND_WITH_STORES / TICKET_BLOCK); b <= Math.floor(lastFinal / TICKET_BLOCK); b++) {
+  const r = await fetch(`${API_BASE}/api/stores/tickets/${b}`, { headers: { 'User-Agent': 'lotto-note-build' } });
+  if (!r.ok) {
+    blocksOk = false;
+    break;
+  }
+  for (const t of (await r.json()) as Ticket[]) byRound.set(t.round, [...(byRound.get(t.round) ?? []), t]);
+}
+if (blocksOk) {
+  rmSync(storesDir, { recursive: true, force: true });
+  mkdirSync(storesDir, { recursive: true });
+  for (let round = FIRST_ROUND_WITH_STORES; round <= lastFinal; round++) {
+    // Same shape as /api/draws/:round/stores, minus fields the app does not show.
+    const tickets = (byRound.get(round) ?? []).map(({ round: _r, phone: _p, ...t }) => t);
+    writeFileSync(resolve(storesDir, `${round}.json`), JSON.stringify(tickets));
+  }
+  console.log(`wrote static store files for rounds ${FIRST_ROUND_WITH_STORES}~${lastFinal}`);
+} else {
+  // The Worker serving the bulk export is not deployed yet: the app falls back to the API for every round.
+  console.warn('GET /api/stores/tickets failed; skipping static store files (the app will use the API)');
+}
+
 const latest = draws[draws.length - 1];
 const urls = [
   { loc: '/', lastmod: latest.drawDate, priority: '1.0' },
@@ -72,11 +106,17 @@ const urls = [
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls
-  .map((u) => `  <url><loc>${SITE_URL}${u.loc}</loc>${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ''}<priority>${u.priority}</priority></url>`)
+  .map(
+    (u) =>
+      `  <url><loc>${SITE_URL}${u.loc}</loc>${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ''}<priority>${u.priority}</priority></url>`,
+  )
   .join('\n')}
 </urlset>
 `;
 writeFileSync(resolve(root, 'public/sitemap.xml'), sitemap);
-writeFileSync(resolve(root, 'public/robots.txt'), `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_URL}/sitemap.xml\n`);
+writeFileSync(
+  resolve(root, 'public/robots.txt'),
+  `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_URL}/sitemap.xml\n`,
+);
 
 console.log(`synced ${draws.length} draws (latest ${latest.round}, ${latest.drawDate}), sitemap ${urls.length} urls`);

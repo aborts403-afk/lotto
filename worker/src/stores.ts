@@ -81,7 +81,8 @@ export async function storesSummary(db: D1Database): Promise<StoresSummary> {
     )
     .all<AggRow>();
   const range = await db
-    .prepare('SELECT MIN(round) AS fromRound, MAX(round) AS toRound FROM winning_tickets')
+    // Separate subqueries: MIN and MAX together make SQLite scan the whole index; alone each reads one row.
+    .prepare('SELECT (SELECT MIN(round) FROM winning_tickets) AS fromRound, (SELECT MAX(round) FROM winning_tickets) AS toRound')
     .first<{ fromRound: number; toRound: number }>();
   return summarize(results, range?.fromRound ?? 0, range?.toRound ?? 0);
 }

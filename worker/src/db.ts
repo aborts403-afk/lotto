@@ -89,8 +89,19 @@ export async function setMeta(db: D1Database, key: string, value: string): Promi
     .run();
 }
 
+// Large cached values kept in meta (not status), left out of getMeta / the health response.
+export const STORES_SUMMARY_KEY = 'stores_summary';
+
+export async function getMetaValue(db: D1Database, key: string): Promise<string | null> {
+  const row = await db.prepare('SELECT value FROM meta WHERE key = ?').bind(key).first<{ value: string }>();
+  return row?.value ?? null;
+}
+
 export async function getMeta(db: D1Database): Promise<Record<string, string>> {
-  const { results } = await db.prepare('SELECT key, value FROM meta').all<{ key: string; value: string }>();
+  const { results } = await db
+    .prepare('SELECT key, value FROM meta WHERE key != ?')
+    .bind(STORES_SUMMARY_KEY)
+    .all<{ key: string; value: string }>();
   return Object.fromEntries(results.map((r) => [r.key, r.value]));
 }
 
