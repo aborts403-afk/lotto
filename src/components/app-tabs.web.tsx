@@ -26,11 +26,16 @@ export default function AppTabs() {
       <TabList asChild>
         {wide ? (
           <TopBar>
-            {TABS.map((t) => (
-              <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
-                <TopButton>{t.label}</TopButton>
-              </TabTrigger>
-            ))}
+            {/* The brand on the left links home, so the home tab is registered without a button. */}
+            {TABS.map((t) =>
+              t.name === 'home' ? (
+                <TabTrigger key={t.name} name={t.name} href={t.href} style={styles.hidden} />
+              ) : (
+                <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+                  <TopButton>{t.label}</TopButton>
+                </TabTrigger>
+              ),
+            )}
           </TopBar>
         ) : (
           <BottomBar>
@@ -145,4 +150,5 @@ const styles = StyleSheet.create({
   topTabs: { flexDirection: 'row', gap: 4 },
   topButton: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: Radius.sm },
   pressed: { opacity: 0.6 },
+  hidden: { display: 'none' },
 });

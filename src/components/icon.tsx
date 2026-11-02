@@ -24,6 +24,7 @@ const ICONS = {
   tune: { ios: 'slider.horizontal.3', android: 'tune', web: 'tune' },
   trash: { ios: 'trash', android: 'delete', web: 'delete' },
   plus: { ios: 'plus', android: 'add', web: 'add' },
+  map: { ios: 'map', android: 'map', web: 'map' },
 } as const;
 
 export type IconName = keyof typeof ICONS;

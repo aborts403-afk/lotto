@@ -14,7 +14,7 @@ import { RANK_COLORS } from '@/components/ticket-result';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCount, formatDateDots, formatDateKo, formatKRW } from '@/lib/format';
-import { DRAWS_DESC, firstPrizeSharing, getDraw, LATEST_DRAW, type Draw } from '@/lib/lotto/draws';
+import { DRAWS_DESC, firstPrizeSharing, getDraw, type Draw } from '@/lib/lotto/draws';
 import { lessPopularThanPercent } from '@/lib/lotto/generator';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
 
@@ -99,18 +99,32 @@ function RankTable({ d }: { d: Draw }) {
   );
 }
 
-function NavButton({ round, dir }: { round: number; dir: 'prev' | 'next' }) {
+// Previous / next round, shown at the top right next to the title. Missing rounds show a disabled arrow.
+function RoundNav({ prev, next }: { prev?: number; next?: number }) {
   const theme = useTheme();
+  const arrow = (round: number | undefined, dir: 'prev' | 'next') => {
+    const icon = <Icon name={dir === 'prev' ? 'chevronLeft' : 'chevronRight'} size={20} color={theme.text} />;
+    const label = dir === 'prev' ? '이전 회차' : '다음 회차';
+    return round ? (
+      <PressableLink
+        href={`/round/${round}`}
+        accessibilityLabel={`${label} (${round}회)`}
+        style={[styles.navButton, { backgroundColor: theme.backgroundElement }]}>
+        {icon}
+      </PressableLink>
+    ) : (
+      <View
+        accessibilityLabel={`${label} 없음`}
+        style={[styles.navButton, styles.navDisabled, { backgroundColor: theme.backgroundElement }]}>
+        {icon}
+      </View>
+    );
+  };
   return (
-    <PressableLink
-      href={`/round/${round}`}
-      style={[styles.nav, { backgroundColor: theme.backgroundElement }, dir === 'next' && styles.navNext]}>
-      {dir === 'prev' && <Icon name="chevronLeft" size={16} color={theme.textSecondary} />}
-      <ThemedText type="smallBold" themeColor="textSecondary">
-        {round}회
-      </ThemedText>
-      {dir === 'next' && <Icon name="chevronRight" size={16} color={theme.textSecondary} />}
-    </PressableLink>
+    <View style={styles.navRow}>
+      {arrow(prev, 'prev')}
+      {arrow(next, 'next')}
+    </View>
   );
 }
 
@@ -142,7 +156,8 @@ export default function RoundScreen() {
     <Page
       title={`${d.round}회 당첨번호`}
       subtitle={`${formatDateKo(d.drawDate)} 추첨`}
-      back={{ href: '/round', label: '회차 목록' }}>
+      back={{ href: '/round', label: '회차 목록' }}
+      right={<RoundNav prev={prev?.round} next={next?.round} />}>
       <Card>
         <DrawNumbers numbers={d.numbers} bonus={d.bonus} size={42} fill />
         <View style={[styles.stats, { borderColor: theme.border }]}>
@@ -171,19 +186,6 @@ export default function RoundScreen() {
       <RankTable d={d} />
       <RoundStores round={d.round} firstWinners={first.winners} />
       <SharingCard d={d} />
-
-      <View style={styles.navRow}>
-        {prev ? <NavButton round={prev.round} dir="prev" /> : <View />}
-        {next ? (
-          <NavButton round={next.round} dir="next" />
-        ) : d.round === LATEST_DRAW.round ? (
-          <ThemedText type="caption" themeColor="textTertiary">
-            최신 회차예요
-          </ThemedText>
-        ) : (
-          <View />
-        )}
-      </View>
     </Page>
   );
 }
@@ -197,15 +199,8 @@ const styles = StyleSheet.create({
   tr: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   rankDot: { width: 40, height: 28, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
   sales: { paddingTop: 10, textAlign: 'right' },
-  navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.two },
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: Radius.md,
-  },
-  navNext: {},
+  navRow: { flexDirection: 'row', gap: 6 },
+  navButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  navDisabled: { opacity: 0.3 },
   pressed: { opacity: 0.7 },
 });

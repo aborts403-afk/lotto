@@ -7,6 +7,7 @@ import { BarList } from '@/components/bar-list';
 import { Card, Notice, Pill, Section } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { Chips } from '@/components/chips';
+import { MapButton } from '@/components/map-button';
 import { Page } from '@/components/page';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -81,6 +82,11 @@ function StoreItem({ store, rank, last }: { store: StoreRow; rank: number; last:
               {picks ? ` · ${picks}` : ''}
             </ThemedText>
           </View>
+          {store.address && (
+            <View style={styles.mapRow}>
+              <MapButton place={{ name: store.name, address: store.address }} label="네이버 지도에서 보기" />
+            </View>
+          )}
           <View style={styles.rounds}>
             {rounds.map((r) => (
               <PressableLink
@@ -174,6 +180,7 @@ const styles = StyleSheet.create({
   counts: { alignItems: 'flex-end' },
   detail: { gap: 10, paddingLeft: 34, paddingBottom: 14 },
   pills: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  mapRow: { flexDirection: 'row' },
   rounds: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   roundChip: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999 },
 });
