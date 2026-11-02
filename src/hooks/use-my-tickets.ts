@@ -74,7 +74,13 @@ export async function addTickets(round: number, sets: readonly (readonly number[
     const numbers = [...s].sort((a, b) => a - b);
     const exists = [...tickets, ...added].some((t) => t.round === round && sameNumbers(t.numbers, numbers));
     if (!exists) {
-      added.push({ id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`, round, numbers, source, createdAt: now });
+      added.push({
+        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        round,
+        numbers,
+        source,
+        createdAt: now,
+      });
     }
   }
   if (added.length) await persist([...added, ...tickets].slice(0, MAX_TICKETS));

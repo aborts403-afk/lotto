@@ -1,9 +1,11 @@
-import { Link } from 'expo-router';
 import type { Metadata } from 'expo-router/server';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Card } from '@/components/card';
+import { PressableLink } from '@/components/pressable-link';
+import { BarList } from '@/components/bar-list';
+import { Card, Notice, Pill, Section } from '@/components/card';
+import { Icon } from '@/components/icon';
 import { Chips } from '@/components/chips';
 import { Page } from '@/components/page';
 import { ThemedText } from '@/components/themed-text';
@@ -29,56 +31,71 @@ export function generateMetadata(): Metadata {
 
 const ALL = '전체';
 
-function StoreItem({ store, rank }: { store: StoreRow; rank: number }) {
+function StoreItem({ store, rank, last }: { store: StoreRow; rank: number; last: boolean }) {
+  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const rounds = [...new Set(store.firstRounds)];
-  const picks = [store.auto && `자동 ${store.auto}`, store.manual && `수동 ${store.manual}`, store.semiAuto && `반자동 ${store.semiAuto}`]
+  const picks = [
+    store.auto && `자동 ${store.auto}`,
+    store.manual && `수동 ${store.manual}`,
+    store.semiAuto && `반자동 ${store.semiAuto}`,
+  ]
     .filter(Boolean)
     .join(' · ');
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={({ pressed }) => pressed && styles.pressed}>
-      <Card>
-        <View style={styles.storeHead}>
-          <ThemedText type="smallBold" style={styles.rank}>
-            {rank}
+    <View style={!last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(!open)}
+        style={({ pressed }) => [styles.storeHead, pressed && styles.pressed]}>
+        <ThemedText type="smallBold" style={[styles.rank, rank <= 3 && { color: theme.primary }]}>
+          {rank}
+        </ThemedText>
+        <View style={styles.flex}>
+          <ThemedText type="smallBold" numberOfLines={1}>
+            {store.name}
           </ThemedText>
-          <View style={styles.flex}>
-            <ThemedText type="smallBold">
-              {store.name}
-              {store.closed ? <ThemedText type="small" themeColor="textSecondary">  폐점</ThemedText> : null}
-            </ThemedText>
-            {store.address && (
-              <ThemedText type="small" themeColor="textSecondary">
-                {store.address}
-              </ThemedText>
-            )}
-          </View>
-          <View style={styles.counts}>
-            <ThemedText type="smallBold">1등 {store.first}번</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              2등 {formatCount(store.second)}번
-            </ThemedText>
-          </View>
+          <ThemedText type="caption" themeColor="textTertiary" numberOfLines={open ? undefined : 1}>
+            {store.address ?? '온라인 판매'}
+          </ThemedText>
         </View>
-        {open && (
-          <View style={styles.detail}>
-            <ThemedText type="small" themeColor="textSecondary">
-              1등 {rounds.length}개 회차{rounds.length < store.first ? ` (한 회차에 여러 장 나온 적 있음)` : ''}
+        <View style={styles.counts}>
+          <ThemedText type="smallBold" style={{ color: theme.primary }}>
+            1등 {store.first}
+          </ThemedText>
+          <ThemedText type="caption" themeColor="textTertiary">
+            2등 {formatCount(store.second)}
+          </ThemedText>
+        </View>
+        <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
+          <Icon name="chevronDown" size={16} color={theme.textTertiary} />
+        </View>
+      </Pressable>
+      {open && (
+        <View style={styles.detail}>
+          <View style={styles.pills}>
+            {store.closed && <Pill label="폐점" color={theme.textTertiary} soft />}
+            <ThemedText type="caption" themeColor="textSecondary">
+              1등 {rounds.length}개 회차{rounds.length < store.first ? ' (한 회차 여러 장 포함)' : ''}
               {picks ? ` · ${picks}` : ''}
             </ThemedText>
-            <View style={styles.rounds}>
-              {rounds.map((r) => (
-                <Link key={r} href={`/round/${r}`}>
-                  <ThemedText type="small" style={styles.roundLink}>
-                    {r}회
-                  </ThemedText>
-                </Link>
-              ))}
-            </View>
           </View>
-        )}
-      </Card>
-    </Pressable>
+          <View style={styles.rounds}>
+            {rounds.map((r) => (
+              <PressableLink
+                key={r}
+                href={`/round/${r}`}
+                style={[styles.roundChip, { backgroundColor: theme.backgroundSelected }]}>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {r}회
+                </ThemedText>
+              </PressableLink>
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -90,76 +107,73 @@ export default function StoresScreen() {
   const maxFirst = Math.max(...STORES.regions.map((r) => r.first));
 
   return (
-    <Page>
-      <Link href="/stats">
-        <ThemedText type="linkPrimary">← 번호 통계</ThemedText>
-      </Link>
-
-      <View style={styles.header}>
-        <ThemedText type="subtitle">1등 당첨 판매점</ThemedText>
-        <ThemedText themeColor="textSecondary">
-          {STORES.fromRound}~{STORES.toRound}회 1등 {formatCount(STORES.firstTickets)}장 기준
-        </ThemedText>
-      </View>
-
-      <Card>
-        <ThemedText type="small">
-          1등이 나온 판매점 {formatCount(STORES.firstStores)}곳 중 {formatCount(STORES.repeatStores)}곳이 두 번 이상 1등을 냈어요.
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          1등이 많이 나온 곳은 대부분 그만큼 많이 파는 곳이에요. 어느 판매점에서 사든 한 장의 당첨 확률은 같아요. 한 사람이
-          같은 번호를 여러 장 사서 1등이 되면 여러 번으로 세요.
-        </ThemedText>
+    <Page
+      title="1등 당첨 판매점"
+      subtitle={`${STORES.fromRound}~${STORES.toRound}회 1등 ${formatCount(STORES.firstTickets)}장 기준`}
+      back={{ href: '/stats', label: '번호 통계' }}>
+      <Card style={styles.summary}>
+        <View style={styles.summaryItem}>
+          <ThemedText type="caption" themeColor="textTertiary">
+            1등 나온 판매점
+          </ThemedText>
+          <ThemedText type="heading">{formatCount(STORES.firstStores)}곳</ThemedText>
+        </View>
+        <View style={[styles.divider, { backgroundColor: theme.border }]} />
+        <View style={styles.summaryItem}>
+          <ThemedText type="caption" themeColor="textTertiary">
+            두 번 이상
+          </ThemedText>
+          <ThemedText type="heading">{formatCount(STORES.repeatStores)}곳</ThemedText>
+        </View>
       </Card>
+      <Notice>1등이 많이 나온 곳은 대부분 그만큼 많이 파는 곳이에요. 어느 판매점에서 사든 한 장의 당첨 확률은 같아요.</Notice>
 
-      <View style={styles.section}>
-        <ThemedText type="smallBold">지역별 1등</ThemedText>
-        {STORES.regions.map((r) => (
-          <View key={r.region} style={styles.regionRow}>
-            <ThemedText type="small" style={styles.regionLabel}>
-              {r.region}
-            </ThemedText>
-            <View style={styles.track}>
-              <View style={[styles.bar, { width: `${(r.first / maxFirst) * 100}%`, backgroundColor: theme.chartSeries }]} />
-            </View>
-            <ThemedText type="small" style={styles.regionValue}>
-              {formatCount(r.first)}
-            </ThemedText>
-          </View>
-        ))}
-        <ThemedText type="small" themeColor="textSecondary">
-          주소가 없는 옛 기록은 빠져 있어요. 광주와 전남은 예전 기록이 하나로 묶여 있어서 합쳐서 셌어요.
+      <Section title="1등 많이 나온 판매점" description="누르면 1등이 나온 회차를 볼 수 있어요">
+        <Chips
+          options={[ALL, ...regions.map((r) => r.region)].map((r) => ({ value: r, label: r }))}
+          value={region}
+          onChange={setRegion}
+          scroll
+        />
+        <Card style={styles.list}>
+          {list.map((s, i) => (
+            <StoreItem key={s.id} store={s} rank={i + 1} last={i === list.length - 1} />
+          ))}
+        </Card>
+        <ThemedText type="caption" themeColor="textTertiary">
+          상호와 주소는 가장 최근 당첨 때 기준이에요. 한 사람이 같은 번호를 여러 장 사서 1등이 되면 여러 번으로 세요.
         </ThemedText>
-      </View>
+      </Section>
 
-      <View style={styles.section}>
-        <ThemedText type="smallBold">1등 많이 나온 판매점</ThemedText>
-        <Chips options={[ALL, ...regions.map((r) => r.region)].map((r) => ({ value: r, label: r }))} value={region} onChange={setRegion} />
-        {list.map((s, i) => (
-          <StoreItem key={s.id} store={s} rank={i + 1} />
-        ))}
-        <ThemedText type="small" themeColor="textSecondary">
-          판매점을 누르면 1등이 나온 회차를 볼 수 있어요. 상호와 주소는 가장 최근 당첨 때 기준이에요.
-        </ThemedText>
-      </View>
+      <Section title="지역별 1등" description="광주·전남은 옛 기록이 묶여 있어 합쳐서 셌어요">
+        <Card>
+          <BarList
+            labelWidth={64}
+            rows={STORES.regions.map((r) => ({
+              key: r.region,
+              label: r.region,
+              value: r.first / maxFirst,
+              valueLabel: formatCount(r.first),
+            }))}
+          />
+        </Card>
+      </Section>
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { gap: Spacing.one },
-  section: { gap: Spacing.two },
-  flex: { flex: 1 },
-  pressed: { opacity: 0.8 },
-  storeHead: { flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-start' },
-  rank: { width: 24, textAlign: 'center' },
+  flex: { flex: 1, gap: 2 },
+  pressed: { opacity: 0.7 },
+  summary: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.three },
+  summaryItem: { flex: 1, alignItems: 'center', gap: 2 },
+  divider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
+  list: { paddingVertical: 4, gap: 0 },
+  storeHead: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 14 },
+  rank: { width: 22, textAlign: 'center' },
   counts: { alignItems: 'flex-end' },
-  detail: { gap: Spacing.two, paddingLeft: 32 },
-  rounds: { flexDirection: 'row', flexWrap: 'wrap', columnGap: Spacing.two },
-  roundLink: { color: '#3c87f7' },
-  regionRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  regionLabel: { width: 72 },
-  track: { flex: 1, height: 12, justifyContent: 'center' },
-  bar: { height: 12, borderTopRightRadius: 4, borderBottomRightRadius: 4, minWidth: 1 },
-  regionValue: { width: 48, textAlign: 'right' },
+  detail: { gap: 10, paddingLeft: 34, paddingBottom: 14 },
+  pills: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  rounds: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  roundChip: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999 },
 });

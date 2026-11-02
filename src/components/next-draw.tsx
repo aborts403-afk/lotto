@@ -28,11 +28,7 @@ export function NextDrawCountdown() {
   const hydrated = useHydrated();
   const now = useNow();
 
-  if (!hydrated) return <ThemedText style={{ fontSize: 24, lineHeight: 32, fontWeight: '700' }}>매주 토요일</ThemedText>;
+  if (!hydrated) return <ThemedText type="heading">매주 토요일</ThemedText>;
   const next = nextDrawTime(new Date(now));
-  return (
-    <ThemedText style={{ fontSize: 24, lineHeight: 32, fontWeight: '700' }}>
-      {formatCountdown(next.getTime() - now)} 남음
-    </ThemedText>
-  );
+  return <ThemedText type="heading">{formatCountdown(next.getTime() - now)} 남음</ThemedText>;
 }

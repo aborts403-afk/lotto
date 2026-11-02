@@ -1,120 +1,148 @@
-import {
-  Tabs,
-  TabList,
-  TabTrigger,
-  TabSlot,
-  TabTriggerSlotProps,
-  TabListProps,
-} from 'expo-router/ui';
-import { Pressable, View, StyleSheet, useWindowDimensions } from 'react-native';
+import { Link } from 'expo-router';
+import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps, type TabListProps } from 'expo-router/ui';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { useHydrated } from '@/hooks/use-hydrated';
+import { Icon, type IconName } from '@/components/icon';
+import { ThemedText } from '@/components/themed-text';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useWideWeb, WEB_BOTTOM_BAR, WEB_TOP_BAR } from '@/hooks/use-layout';
+import { useTheme } from '@/hooks/use-theme';
 
-import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
+const TABS: { name: string; href: '/' | '/round' | '/generate' | '/my' | '/stats'; label: string; icon: IconName }[] = [
+  { name: 'home', href: '/', label: '홈', icon: 'home' },
+  { name: 'round', href: '/round', label: '회차', icon: 'list' },
+  { name: 'generate', href: '/generate', label: '번호 생성', icon: 'dice' },
+  { name: 'my', href: '/my', label: '내 번호', icon: 'ticket' },
+  { name: 'stats', href: '/stats', label: '통계', icon: 'chart' },
+];
 
+// Phones: bottom tab bar with icons, like the app. Desktop: top bar with the brand.
 export default function AppTabs() {
+  const wide = useWideWeb();
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
-        <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>홈</TabButton>
-          </TabTrigger>
-          <TabTrigger name="round" href="/round" asChild>
-            <TabButton>회차</TabButton>
-          </TabTrigger>
-          <TabTrigger name="generate" href="/generate" asChild>
-            <TabButton>번호 생성</TabButton>
-          </TabTrigger>
-          <TabTrigger name="my" href="/my" asChild>
-            <TabButton>내 번호</TabButton>
-          </TabTrigger>
-          <TabTrigger name="stats" href="/stats" asChild>
-            <TabButton>통계</TabButton>
-          </TabTrigger>
-        </CustomTabList>
+        {wide ? (
+          <TopBar>
+            {TABS.map((t) => (
+              <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+                <TopButton>{t.label}</TopButton>
+              </TabTrigger>
+            ))}
+          </TopBar>
+        ) : (
+          <BottomBar>
+            {TABS.map((t) => (
+              <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+                <BottomButton icon={t.icon}>{t.label}</BottomButton>
+              </TabTrigger>
+            ))}
+          </BottomBar>
+        )}
       </TabList>
     </Tabs>
   );
 }
 
 // `ref` is typed as a component type in TabTriggerSlotProps and does not fit Pressable; it is not needed here.
-export function TabButton({ children, isFocused, ref: _ref, ...props }: TabTriggerSlotProps) {
+function BottomButton({ children, isFocused, icon, ref: _ref, ...props }: TabTriggerSlotProps & { icon: IconName }) {
+  const theme = useTheme();
+  const color = isFocused ? theme.text : theme.textTertiary;
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
-          {children}
-        </ThemedText>
-      </ThemedView>
+    <Pressable {...props} style={({ pressed }) => [styles.bottomButton, pressed && styles.pressed]}>
+      <Icon name={icon} size={24} color={color} />
+      <ThemedText type="caption" style={[styles.bottomLabel, { color }, isFocused && styles.bold]}>
+        {children}
+      </ThemedText>
     </Pressable>
   );
 }
 
-// Five tabs and the brand do not fit on a phone-width browser, so narrow screens drop the brand and spread the tabs.
-const NARROW = 560;
-
-export function CustomTabList(props: TabListProps) {
-  const hydrated = useHydrated();
-  const width = useWindowDimensions().width;
-  // The static HTML has no window size; render the compact bar until hydrated so phones never overflow.
-  const narrow = hydrated ? width < NARROW : true;
+function BottomBar(props: TabListProps) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <View {...props} style={[styles.tabListContainer, narrow && styles.tabListNarrow]}>
-      <ThemedView type="backgroundElement" style={[styles.innerContainer, narrow && styles.innerNarrow]}>
-        {!narrow && (
-          <ThemedText type="smallBold" style={styles.brandText}>
-            로또 노트
-          </ThemedText>
-        )}
+    <View
+      {...props}
+      style={[
+        styles.bottomBar,
+        {
+          backgroundColor: theme.backgroundElement,
+          borderColor: theme.border,
+          paddingBottom: insets.bottom,
+          height: WEB_BOTTOM_BAR + insets.bottom,
+        },
+      ]}
+    />
+  );
+}
 
-        {props.children}
-      </ThemedView>
+function TopButton({ children, isFocused, ref: _ref, ...props }: TabTriggerSlotProps) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      {...props}
+      style={({ pressed }) => [
+        styles.topButton,
+        isFocused && { backgroundColor: theme.backgroundSelected },
+        pressed && styles.pressed,
+      ]}>
+      <ThemedText type="smallBold" style={{ color: isFocused ? theme.text : theme.textTertiary }}>
+        {children}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
+function TopBar(props: TabListProps) {
+  const theme = useTheme();
+  return (
+    <View {...props} style={[styles.topBar, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View style={styles.topInner}>
+        <Link href="/" style={styles.brand}>
+          <ThemedText type="heading">로또 노트</ThemedText>
+        </Link>
+        <View style={styles.topTabs}>{props.children}</View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tabListContainer: {
-    position: 'absolute',
-    width: '100%',
-    padding: Spacing.three,
+  bottomBar: {
+    position: 'fixed' as 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    zIndex: 10,
+  },
+  bottomButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, height: WEB_BOTTOM_BAR },
+  bottomLabel: { fontSize: 11, lineHeight: 14 },
+  bold: { fontWeight: '700' },
+  topBar: {
+    position: 'fixed' as 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: WEB_TOP_BAR,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
+    zIndex: 10,
+  },
+  topInner: {
+    width: '100%',
+    maxWidth: MaxContentWidth + Spacing.five * 2,
+    paddingHorizontal: Spacing.four,
     flexDirection: 'row',
-  },
-  innerContainer: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
-    borderRadius: Spacing.five,
-    flexDirection: 'row',
     alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.two,
-    maxWidth: MaxContentWidth,
   },
-  tabListNarrow: {
-    padding: Spacing.two,
-  },
-  innerNarrow: {
-    paddingHorizontal: Spacing.one,
-    gap: 0,
-    justifyContent: 'space-between',
-  },
-  brandText: {
-    marginRight: 'auto',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  tabButtonView: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: 12,
-    borderRadius: Spacing.three,
-  },
+  brand: { marginRight: 'auto' },
+  topTabs: { flexDirection: 'row', gap: 4 },
+  topButton: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: Radius.sm },
+  pressed: { opacity: 0.6 },
 });

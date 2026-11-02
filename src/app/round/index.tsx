@@ -1,17 +1,20 @@
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import type { Metadata } from 'expo-router/server';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 
+import { PressableLink } from '@/components/pressable-link';
 import { Button } from '@/components/button';
+import { Card } from '@/components/card';
 import { DrawNumbers } from '@/components/draw-numbers';
+import { Icon } from '@/components/icon';
 import { NumberPicker } from '@/components/number-picker';
-import { Collapsible } from '@/components/ui/collapsible';
-import { useTheme } from '@/hooks/use-theme';
+import { PageHeader } from '@/components/page';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useScreenInsets } from '@/hooks/use-layout';
+import { useTheme } from '@/hooks/use-theme';
 import { formatDateDots, formatKRW } from '@/lib/format';
 import { DRAWS_DESC, LATEST_DRAW, type Draw } from '@/lib/lotto/draws';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
@@ -28,29 +31,34 @@ export function generateMetadata(): Metadata {
 }
 
 function Row({ d, highlight }: { d: Draw; highlight?: readonly number[] }) {
+  const theme = useTheme();
+  const first = d.ranks[0];
   return (
-    <Link href={`/round/${d.round}`} asChild>
-      <Pressable style={({ pressed }) => pressed && styles.pressed}>
-        <ThemedView type="backgroundElement" style={styles.row}>
-          <View style={styles.rowHeader}>
-            <ThemedText type="smallBold">{d.round}회</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {formatDateDots(d.drawDate)} · 1등 {d.ranks[0].winners}명
-              {d.ranks[0].winners > 0 ? ` · ${formatKRW(d.ranks[0].prize)}` : ''}
-            </ThemedText>
-          </View>
-          <DrawNumbers numbers={d.numbers} bonus={d.bonus} size={30} highlight={highlight} />
-        </ThemedView>
-      </Pressable>
-    </Link>
+    <PressableLink href={`/round/${d.round}`}>
+      <Card style={styles.row}>
+        <View style={styles.rowHead}>
+          <ThemedText type="smallBold">{d.round}회</ThemedText>
+          <ThemedText type="caption" themeColor="textTertiary">
+            {formatDateDots(d.drawDate)}
+          </ThemedText>
+          <View style={styles.flex} />
+          <ThemedText type="caption" themeColor="textSecondary">
+            {first.winners > 0 ? `1등 ${first.winners}명 · ${formatKRW(first.prize)}` : '1등 없음'}
+          </ThemedText>
+          <Icon name="chevronRight" size={14} color={theme.textTertiary} />
+        </View>
+        <DrawNumbers numbers={d.numbers} bonus={d.bonus} size={34} highlight={highlight} fill />
+      </Card>
+    </PressableLink>
   );
 }
 
 export default function RoundListScreen() {
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const theme = useTheme();
   const [roundText, setRoundText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState<number[]>([]);
 
   const data = useMemo(
@@ -61,7 +69,7 @@ export default function RoundListScreen() {
   const go = () => {
     const n = Number(roundText);
     if (!Number.isInteger(n) || n < 1 || n > LATEST_DRAW.round) {
-      setError(`1~${LATEST_DRAW.round} 사이 회차를 넣어 주세요.`);
+      setError(`1~${LATEST_DRAW.round} 사이의 회차를 넣어 주세요`);
       return;
     }
     setError(null);
@@ -70,60 +78,78 @@ export default function RoundListScreen() {
   const toggle = (n: number) =>
     setFilter((f) => (f.includes(n) ? f.filter((x) => x !== n) : f.length >= 6 ? f : [...f, n].sort((a, b) => a - b)));
 
+  const header = (
+    <View style={styles.header}>
+      <PageHeader title="회차별 당첨번호" subtitle={`1회부터 ${LATEST_DRAW.round}회까지`} />
+      <View style={styles.searchRow}>
+        <View style={[styles.search, { backgroundColor: theme.backgroundElement }]}>
+          <Icon name="search" size={18} color={theme.textTertiary} />
+          <TextInput
+            value={roundText}
+            onChangeText={(v) => {
+              setRoundText(v.replace(/\D/g, '').slice(0, 5));
+              setError(null);
+            }}
+            onSubmitEditing={go}
+            placeholder="회차 번호로 이동"
+            placeholderTextColor={theme.textTertiary}
+            keyboardType="number-pad"
+            returnKeyType="go"
+            accessibilityLabel="회차 번호"
+            style={[styles.searchInput, { color: theme.text }]}
+          />
+          {roundText ? <Button label="이동" size="sm" variant="primary" onPress={go} /> : null}
+        </View>
+        <Button
+          icon="tune"
+          accessibilityLabel="번호로 찾기"
+          variant={filterOpen || filter.length ? 'tonal' : 'secondary'}
+          onPress={() => setFilterOpen(!filterOpen)}
+          style={!filterOpen && !filter.length ? { backgroundColor: theme.backgroundElement } : undefined}
+        />
+      </View>
+      {error && (
+        <ThemedText type="caption" style={{ color: theme.danger }}>
+          {error}
+        </ThemedText>
+      )}
+      {filterOpen && (
+        <Card>
+          <View style={styles.between}>
+            <ThemedText type="heading">번호로 찾기</ThemedText>
+            {filter.length > 0 && <Button label="초기화" size="sm" variant="ghost" onPress={() => setFilter([])} />}
+          </View>
+          <ThemedText type="caption" themeColor="textTertiary">
+            고른 번호가 모두 나온 회차만 보여요 (보너스 포함, 최대 6개).
+          </ThemedText>
+          <NumberPicker fixed={filter} onPress={toggle} />
+        </Card>
+      )}
+      {filter.length > 0 && (
+        <ThemedText type="smallBold" themeColor="textSecondary" style={styles.resultCount}>
+          {filter.join(', ')} 포함 회차 {data.length}개
+        </ThemedText>
+      )}
+    </View>
+  );
+
   return (
     <ThemedView style={styles.container}>
       <FlatList
         data={data}
         keyExtractor={(d) => String(d.round)}
         renderItem={({ item }) => <Row d={item} highlight={filter.length ? filter : undefined} />}
-        initialNumToRender={20}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <ThemedText type="subtitle">회차별 당첨번호</ThemedText>
-            <ThemedText themeColor="textSecondary">1회부터 {LATEST_DRAW.round}회까지</ThemedText>
-            <View style={styles.search}>
-              <TextInput
-                value={roundText}
-                onChangeText={(v) => setRoundText(v.replace(/\D/g, '').slice(0, 5))}
-                onSubmitEditing={go}
-                placeholder="회차 번호로 이동"
-                placeholderTextColor={theme.textSecondary}
-                keyboardType="number-pad"
-                returnKeyType="go"
-                accessibilityLabel="회차 번호"
-                style={[styles.input, { color: theme.text, borderColor: theme.chartGrid }]}
-              />
-              <Button label="이동" onPress={go} disabled={!roundText} />
-            </View>
-            {error && (
-              <ThemedText type="small" themeColor="textSecondary">
-                {error}
-              </ThemedText>
-            )}
-            <Collapsible title={filter.length ? `번호로 찾기: ${filter.join(', ')}` : '번호로 찾기'}>
-              <View style={styles.filter}>
-                <NumberPicker fixed={filter} excluded={[]} onPress={toggle} />
-                <View style={styles.filterFoot}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-                    {filter.length
-                      ? `고른 번호가 모두 나온 회차 ${data.length}개 (보너스 포함)`
-                      : '번호를 고르면 그 번호가 모두 나온 회차만 보여요.'}
-                  </ThemedText>
-                  {filter.length > 0 && <Button label="초기화" onPress={() => setFilter([])} />}
-                </View>
-              </View>
-            </Collapsible>
-          </View>
-        }
+        initialNumToRender={12}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={header}
         ListEmptyComponent={
-          <ThemedText type="small" themeColor="textSecondary">
-            고른 번호가 모두 나온 회차가 없어요.
-          </ThemedText>
+          <Card style={styles.empty}>
+            <ThemedText type="small" themeColor="textSecondary">
+              고른 번호가 모두 나온 회차가 없어요.
+            </ThemedText>
+          </Card>
         }
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + Spacing.six, paddingBottom: insets.bottom + BottomTabInset + Spacing.four },
-        ]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
       />
     </ThemedView>
   );
@@ -131,14 +157,30 @@ export default function RoundListScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', paddingHorizontal: Spacing.four, gap: Spacing.two },
-  header: { gap: Spacing.two, marginBottom: Spacing.three },
-  search: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
-  input: { flex: 1, borderWidth: 1.5, borderRadius: Spacing.three, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
-  filter: { gap: Spacing.two },
-  filterFoot: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  content: {
+    width: '100%',
+    maxWidth: MaxContentWidth + Spacing.three * 2,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.three,
+    gap: 10,
+  },
+  header: { gap: 12, marginBottom: 6 },
+  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   flex: { flex: 1 },
-  row: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.two },
-  rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
+  searchRow: { flexDirection: 'row', gap: Spacing.two },
+  search: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderRadius: Radius.md,
+    paddingLeft: 14,
+    paddingRight: 6,
+  },
+  searchInput: { flex: 1, paddingVertical: 12, fontSize: 16 },
+  resultCount: { paddingHorizontal: 4 },
+  row: { gap: 12, padding: Spacing.three },
+  rowHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  empty: { alignItems: 'center' },
   pressed: { opacity: 0.7 },
 });

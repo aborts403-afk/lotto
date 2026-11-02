@@ -49,7 +49,9 @@ export function ColumnChart({ columns, height = 180, reference, tickEvery = 1 }:
             <View key={t} style={[styles.grid, { bottom: (t / max) * height, backgroundColor: theme.chartGrid }]} />
           ))}
           {reference && (
-            <View style={[styles.reference, { bottom: (reference.value / max) * height, backgroundColor: theme.textSecondary }]} />
+            <View
+              style={[styles.reference, { bottom: (reference.value / max) * height, backgroundColor: theme.textSecondary }]}
+            />
           )}
           <View style={styles.bars}>
             {columns.map((c) => {
@@ -91,7 +93,9 @@ export function ColumnChart({ columns, height = 180, reference, tickEvery = 1 }:
       {reference && (
         <View style={styles.legend}>
           <View style={[styles.legendLine, { backgroundColor: theme.textSecondary }]} />
-          <ThemedText type="small" themeColor="textSecondary">{reference.label}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {reference.label}
+          </ThemedText>
         </View>
       )}
     </View>

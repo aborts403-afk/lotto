@@ -1,0 +1,34 @@
+import { SymbolView, type SFSymbol } from 'expo-symbols';
+
+// One icon name per meaning, mapped to SF Symbols (iOS) and Material Symbols (Android, web).
+const ICONS = {
+  home: { ios: 'house.fill', android: 'home', web: 'home' },
+  list: { ios: 'list.number', android: 'format_list_numbered', web: 'format_list_numbered' },
+  dice: { ios: 'dice.fill', android: 'casino', web: 'casino' },
+  ticket: { ios: 'ticket.fill', android: 'confirmation_number', web: 'confirmation_number' },
+  chart: { ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' },
+  store: { ios: 'storefront.fill', android: 'storefront', web: 'storefront' },
+  search: { ios: 'magnifyingglass', android: 'search', web: 'search' },
+  chevronRight: { ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' },
+  chevronLeft: { ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' },
+  chevronDown: { ios: 'chevron.down', android: 'expand_more', web: 'expand_more' },
+  close: { ios: 'xmark', android: 'close', web: 'close' },
+  info: { ios: 'info.circle', android: 'info', web: 'info' },
+  refresh: { ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' },
+  copy: { ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' },
+  share: { ios: 'square.and.arrow.up', android: 'share', web: 'share' },
+  bookmark: { ios: 'bookmark', android: 'bookmark_add', web: 'bookmark_add' },
+  check: { ios: 'checkmark', android: 'check', web: 'check' },
+  trophy: { ios: 'trophy.fill', android: 'trophy', web: 'trophy' },
+  clock: { ios: 'clock', android: 'schedule', web: 'schedule' },
+  tune: { ios: 'slider.horizontal.3', android: 'tune', web: 'tune' },
+  trash: { ios: 'trash', android: 'delete', web: 'delete' },
+  plus: { ios: 'plus', android: 'add', web: 'add' },
+} as const;
+
+export type IconName = keyof typeof ICONS;
+
+export function Icon({ name, size = 20, color }: { name: IconName; size?: number; color: string }) {
+  const n = ICONS[name];
+  return <SymbolView name={{ ios: n.ios as SFSymbol, android: n.android, web: n.web }} size={size} tintColor={color} />;
+}

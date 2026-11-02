@@ -39,7 +39,13 @@ export function LottoBalls({
   return (
     <View style={styles.row}>
       {numbers.map((n) => (
-        <LottoBall key={n} n={n} size={size} muted={highlight && !highlight.includes(n) && !ring?.includes(n)} ring={ring?.includes(n)} />
+        <LottoBall
+          key={n}
+          n={n}
+          size={size}
+          muted={highlight && !highlight.includes(n) && !ring?.includes(n)}
+          ring={ring?.includes(n)}
+        />
       ))}
     </View>
   );
@@ -47,8 +53,8 @@ export function LottoBalls({
 
 const styles = StyleSheet.create({
   ball: { alignItems: 'center', justifyContent: 'center' },
-  text: { color: '#fff', fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.25)', textShadowRadius: 2 },
+  text: { color: '#fff', fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.2)', textShadowRadius: 2, includeFontPadding: false },
   row: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   muted: { opacity: 0.25 },
-  ring: { borderWidth: 3, borderColor: '#208AEF' },
+  ring: { borderWidth: 3, borderColor: '#3182F6' },
 });
