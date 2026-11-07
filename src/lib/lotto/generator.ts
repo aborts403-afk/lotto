@@ -126,6 +126,7 @@ export type GenerateMode =
   | 'random' // uniform, like an auto-pick ticket
   | 'hot' // numbers weighted toward those drawn often recently
   | 'cold' // numbers weighted toward those not drawn for a long time
+  | 'pattern' // numbers weighted by the rule that fitted past draws best (see pattern.ts; it predicts nothing)
   | 'balanced' // shapes most past winning numbers have (odd/even, high/low, sum, no long runs)
   | 'wheel' // every set is made only from the user's candidate numbers
   | 'phrase'; // seeded by a phrase (name, birthday, dream...): same phrase, same numbers this week
@@ -163,7 +164,7 @@ export type GenerateOptions = {
   excluded?: readonly number[]; // never included
   oddCount?: number | null; // exact number of odd numbers, null = any
   sumRange?: readonly [number, number] | null; // inclusive, null = any
-  weights?: readonly number[] | null; // hot/cold: relative weight of each number 1..45 (index n-1)
+  weights?: readonly number[] | null; // hot/cold/pattern: relative weight of each number 1..45 (index n-1)
   pool?: readonly number[] | null; // wheel: candidate numbers; sets use only these (plus fixed)
 };
 
@@ -217,7 +218,8 @@ export function generate(options: GenerateOptions, rng: () => number = Math.rand
   const excluded = new Set(options.excluded ?? []);
   const oddCount = options.oddCount ?? null;
   const sumRange = options.sumRange ?? null;
-  const weighted = (mode === 'hot' || mode === 'cold') && options.weights?.length === 45 ? options.weights : null;
+  const weighted =
+    (mode === 'hot' || mode === 'cold' || mode === 'pattern') && options.weights?.length === 45 ? options.weights : null;
   const pool = mode === 'wheel' ? new Set(options.pool ?? []) : null;
 
   if (fixed.length > MAX_FIXED) return { sets: [], error: 'tooManyFixed' };

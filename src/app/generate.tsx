@@ -34,6 +34,7 @@ import {
 import { FITTED_THROUGH_ROUND } from '@/lib/lotto/popularity-weights';
 import { formatKRWShort } from '@/lib/format';
 import { estimatePayout } from '@/lib/lotto/payout';
+import { PATTERN_FIT, patternBacktest, patternTop6, patternWeights, RANDOM_HITS } from '@/lib/lotto/pattern';
 import { coldWeights, HOT_WINDOW, hotWeights, numberStats, topBy } from '@/lib/lotto/stats';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
 
@@ -74,6 +75,14 @@ const MODES: { value: GenerateMode; label: string; title: string; desc: string; 
     desc: '한동안 안 나온 번호',
     icon: 'snow',
     color: '#1098AD',
+  },
+  {
+    value: 'pattern',
+    label: '역대 패턴',
+    title: '역대 패턴으로 뽑기',
+    desc: '과거를 가장 잘 맞힌 규칙',
+    icon: 'trend',
+    color: '#0CA678',
   },
   {
     value: 'wheel',
@@ -158,6 +167,8 @@ function ModePicker({ value, onChange }: { value: GenerateMode; onChange: (m: Ge
                 </Pressable>
               );
             })}
+            {row.length < FUN_COLUMNS &&
+              Array.from({ length: FUN_COLUMNS - row.length }, (_, k) => <View key={`pad${k}`} style={styles.flex} />)}
           </View>
         ))}
       </View>
@@ -217,9 +228,9 @@ function balancedShareOfAll(): number {
 }
 
 export function generateMetadata(): Metadata {
-  const title = `로또 번호 생성기 - 남들이 안 고르는 번호, 통계·조합·문구로 뽑기 | ${SITE_NAME}`;
+  const title = `로또 번호 생성기 - 남들이 안 고르는 번호, 통계·패턴·조합·문구로 뽑기 | ${SITE_NAME}`;
   const description =
-    '남들이 안 고르는 번호, 완전 무작위, 당첨번호 닮은꼴, 많이 나온/오래 안 나온 번호, 내 후보 조합, 문구로 뽑기. 고정수·제외수, 홀짝·합계 조건도 넣을 수 있어요.';
+    '남들이 안 고르는 번호, 완전 무작위, 당첨번호 닮은꼴, 많이 나온/오래 안 나온 번호, 역대 패턴, 내 후보 조합, 문구로 뽑기. 고정수·제외수, 홀짝·합계 조건도 넣을 수 있어요.';
   return {
     title,
     description,
@@ -255,6 +266,14 @@ function modeDescription(mode: GenerateMode, draws: readonly Draw[]): string {
     case 'cold': {
       const top = topBy(numberStats(draws), (s) => s.drawsSince ?? 0, 5).map((s) => s.n);
       return `오래 안 나온 번호(${top.join(', ')} 등)가 더 잘 뽑혀요. 번호가 "나올 때가 된" 건 아니에요.`;
+    }
+    case 'pattern': {
+      const top = patternTop6(draws);
+      const test = patternBacktest(draws);
+      const verdict = test
+        ? `규칙을 고를 때 쓰지 않은 ${test.from.toLocaleString('ko-KR')}~${test.to.toLocaleString('ko-KR')}회에서는 세트당 ${test.hits.toFixed(2)}개 맞혔어요(무작위 ${RANDOM_HITS.toFixed(2)}개).`
+        : '';
+      return `역대 당첨번호로 만든 3,000가지 규칙 중 ${PATTERN_FIT.from}~${PATTERN_FIT.to}회를 가장 잘 맞힌 규칙(세트당 ${PATTERN_FIT.hits.toFixed(2)}개, 무작위 ${RANDOM_HITS.toFixed(2)}개)이에요. 지금 점수가 높은 번호는 ${top.join(', ')}예요. ${verdict} 과거를 잘 맞힌 규칙이 다음 회차도 잘 맞히지는 않아요.`;
     }
     case 'wheel':
       return '마음에 드는 번호를 7개 이상 고르면, 그 번호들로만 여러 세트를 만들어요.';
@@ -340,7 +359,8 @@ export default function GenerateScreen() {
   const [savedKey, setSavedKey] = useState<string | null>(null);
 
   const weights = useMemo(
-    () => (mode === 'hot' ? hotWeights(draws) : mode === 'cold' ? coldWeights(draws) : null),
+    () =>
+      mode === 'hot' ? hotWeights(draws) : mode === 'cold' ? coldWeights(draws) : mode === 'pattern' ? patternWeights(draws) : null,
     [mode, draws],
   );
   const description = useMemo(() => modeDescription(mode, draws), [mode, draws]);

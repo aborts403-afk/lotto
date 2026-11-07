@@ -33,6 +33,7 @@ const ICONS = {
   grid: { ios: 'square.grid.3x3.fill', android: 'grid_view', web: 'grid_view' },
   text: { ios: 'text.quote', android: 'format_quote', web: 'format_quote' },
   shapes: { ios: 'chart.bar.xaxis', android: 'equalizer', web: 'equalizer' },
+  trend: { ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' },
 } as const;
 
 export type IconName = keyof typeof ICONS;
