@@ -21,12 +21,17 @@ import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
 import type { Draw } from '@/lib/lotto/draws';
 import {
+  anyPrizeChance,
   BALANCED_SUM,
   generate,
   hashSeed,
+  independentPrizeChance,
   isBalanced,
   MAX_FIXED,
+  pastWinningKeys,
+  RARE_SHAPE_SHARE,
   randomCombo,
+  rareShape,
   seededRng,
   type GenerateError,
   type GenerateMode,
@@ -191,6 +196,14 @@ const SUMS = [
   { value: 'any', label: '상관없음' },
   { value: 'mid', label: `${SUM_RANGE[0]}~${SUM_RANGE[1]}` },
 ] as const;
+const SPREADS = [
+  { value: 'on', label: '안 겹치게' },
+  { value: 'off', label: '상관없음' },
+] as const;
+const RARES = [
+  { value: 'on', label: '빼기' },
+  { value: 'off', label: '상관없음' },
+] as const;
 const PICK_MODES = [
   { value: 'fixed', label: '꼭 넣을 번호' },
   { value: 'excluded', label: '뺄 번호' },
@@ -200,6 +213,38 @@ type Count = (typeof COUNTS)[number]['value'];
 type Odd = (typeof ODDS)[number]['value'];
 type Sum = (typeof SUMS)[number]['value'];
 type PickMode = (typeof PICK_MODES)[number]['value'];
+type Spread = (typeof SPREADS)[number]['value'];
+type Rare = (typeof RARES)[number]['value'];
+
+// Past draws (newest first) that had a rare shape, judged against the draw before each.
+function rareInHistory(draws: readonly Draw[]): number {
+  let n = 0;
+  for (let i = 0; i < draws.length; i++) if (rareShape(draws[i].numbers, draws[i + 1]?.numbers)) n++;
+  return n;
+}
+
+const percent = (p: number) => `${(p * 100).toFixed(1)}%`;
+
+// "At least one of these sets wins something this week", next to an ordinary auto pick of the same size.
+function PrizeChance({ count, chance, exact }: { count: number; chance: number; exact: boolean }) {
+  const theme = useTheme();
+  const approx = exact ? '' : '약 ';
+  return (
+    <View style={[styles.chance, { backgroundColor: theme.primarySoft }]}>
+      <View style={styles.between}>
+        <ThemedText type="smallBold">{count}세트 중 하나라도 당첨(5등 이상)</ThemedText>
+        <ThemedText type="heading" style={{ color: theme.primary }}>
+          {approx}
+          {percent(chance)}
+        </ThemedText>
+      </View>
+      <ThemedText type="caption" themeColor="textSecondary">
+        세트끼리 번호가 {exact ? '' : '거의 '}겹치지 않게 뽑아서, 번호가 겹칠 수 있는 자동 {count}장(
+        {percent(independentPrizeChance(count))})보다 높아요. 1등 확률과 평균 당첨 장수는 같아요.
+      </ThemedText>
+    </View>
+  );
+}
 
 const ERRORS: Record<GenerateError, string> = {
   tooManyFixed: `꼭 넣을 번호는 ${MAX_FIXED}개까지 고를 수 있어요.`,
@@ -352,6 +397,9 @@ export default function GenerateScreen() {
   const [fixed, setFixed] = useState<number[]>([]);
   const [excluded, setExcluded] = useState<number[]>([]);
   const [pickMode, setPickMode] = useState<PickMode>('fixed');
+  const [spread, setSpread] = useState<Spread>('on');
+  const [rare, setRare] = useState<Rare>('on');
+  const spreadOn = spread === 'on' && mode !== 'wheel';
   const [pool, setPool] = useState<number[]>([]);
   const [phrase, setPhrase] = useState('');
   const [roll, setRoll] = useState(0);
@@ -364,6 +412,7 @@ export default function GenerateScreen() {
     [mode, draws],
   );
   const description = useMemo(() => modeDescription(mode, draws), [mode, draws]);
+  const rareHistory = useMemo(() => rareInHistory(draws), [draws]);
   const phraseKey = phrase.trim();
   const isWheel = mode === 'wheel';
 
@@ -384,12 +433,16 @@ export default function GenerateScreen() {
           sumRange: sum === 'mid' ? SUM_RANGE : null,
           weights,
           pool: isWheel ? pool : null,
+          pastWinning: pastWinningKeys(draws),
+          spread: spread === 'on',
+          skipRare: rare === 'on',
+          previous: draws[0]?.numbers ?? null,
         },
         rng,
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `roll` forces a new draw
-    [hydrated, mode, count, odd, sum, fixed, excluded, pool, phraseKey, nextRound, weights, roll],
+    [hydrated, mode, count, odd, sum, spread, rare, fixed, excluded, pool, phraseKey, nextRound, weights, draws, roll],
   );
 
   const onPickNumber = (n: number) => {
@@ -413,7 +466,13 @@ export default function GenerateScreen() {
     setPool(toggle(pool, n));
   };
 
-  const sets = result?.sets ?? [];
+  const sets = useMemo(() => result?.sets ?? [], [result]);
+  // Shown only when spreading actually beat an ordinary auto pick (fixed numbers in every set can undo it).
+  const chance = useMemo(() => {
+    if (!spreadOn || sets.length < 2) return null;
+    const c = anyPrizeChance(sets.map((x) => x.numbers));
+    return c && c.chance > independentPrizeChance(sets.length) ? c : null;
+  }, [spreadOn, sets]);
   const resultKey = `${nextRound}:${sets.map((x) => x.numbers.join(',')).join('|')}`;
   const saved = savedKey === resultKey;
   const shareText = [
@@ -457,6 +516,8 @@ export default function GenerateScreen() {
       : []),
     ...(odd !== 'any' ? [{ key: 'odd', label: ODDS.find((o) => o.value === odd)!.label, clear: () => setOdd('any') }] : []),
     ...(sum !== 'any' ? [{ key: 'sum', label: `합계 ${SUM_RANGE[0]}~${SUM_RANGE[1]}`, clear: () => setSum('any') }] : []),
+    ...(!isWheel && spread === 'off' ? [{ key: 'spread', label: '세트끼리 겹침 허용', clear: () => setSpread('on') }] : []),
+    ...(!isWheel && rare === 'off' ? [{ key: 'rare', label: '드문 모양 허용', clear: () => setRare('on') }] : []),
   ];
   const clearAll = () => activeConditions.forEach((c) => c.clear());
 
@@ -550,6 +611,17 @@ export default function GenerateScreen() {
             ))}
           </View>
         )}
+        {chance && <PrizeChance count={sets.length} chance={chance.chance} exact={chance.exact} />}
+        {result?.rareRelaxed && (
+          <ThemedText type="caption" themeColor="textTertiary">
+            고른 조건 때문에 드문 모양을 다 빼지는 못했어요.
+          </ThemedText>
+        )}
+        {result?.spreadRelaxed && (
+          <ThemedText type="caption" themeColor="textTertiary">
+            고른 조건 때문에 세트끼리 번호가 조금 겹쳤어요.
+          </ThemedText>
+        )}
         {result && !result.error && sets.length > 0 && sets.length < Number(count) && (
           <ThemedText type="caption" themeColor="textTertiary">
             조건에 맞는 조합이 {sets.length}개뿐이에요.
@@ -610,7 +682,7 @@ export default function GenerateScreen() {
           }>
           <View style={styles.conditions}>
             <ThemedText type="caption" themeColor="textTertiary">
-              조건은 당첨 확률을 바꾸지 않아요. 원하는 모양의 번호를 받고 싶을 때 쓰세요.
+              홀짝·합계·포함·제외 조건은 당첨 확률을 바꾸지 않아요. 원하는 모양의 번호를 받고 싶을 때 쓰세요.
             </ThemedText>
             <View style={styles.field}>
               <ThemedText type="smallBold">홀짝</ThemedText>
@@ -623,6 +695,24 @@ export default function GenerateScreen() {
                 전체 조합의 79%가 합계 {SUM_RANGE[0]}~{SUM_RANGE[1]} 사이예요.
               </ThemedText>
             </View>
+            {!isWheel && (
+              <View style={styles.field}>
+                <ThemedText type="smallBold">드문 모양</ThemedText>
+                <Segmented options={[...RARES]} value={rare} onChange={setRare} />
+                <ThemedText type="caption" themeColor="textTertiary">
+                  모두 홀수, 합계 80 미만, 4연속처럼 전체 조합의 {Math.round(RARE_SHAPE_SHARE * 100)}%뿐인 모양이에요.
+                </ThemedText>
+              </View>
+            )}
+            {!isWheel && (
+              <View style={styles.field}>
+                <ThemedText type="smallBold">세트끼리 번호</ThemedText>
+                <Segmented options={[...SPREADS]} value={spread} onChange={setSpread} />
+                <ThemedText type="caption" themeColor="textTertiary">
+                  번호가 안 겹치면 여러 세트 중 하나라도 맞을 확률이 조금 올라가요.
+                </ThemedText>
+              </View>
+            )}
             {!isWheel && (
               <View style={styles.field}>
                 <View style={styles.between}>
@@ -653,6 +743,42 @@ export default function GenerateScreen() {
       </Card>
 
       <Section title="알아 두세요">
+        <Card>
+          <Collapsible title="뽑을 때 빼는 번호">
+            <View style={styles.explain}>
+              <ThemedText type="small" themeColor="textSecondary">
+                역대 1등 조합은 어떤 방식에서도 나오지 않게 뺐어요. 이미 나온 번호를 받으면 어색하니까요.
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                드문 모양도 빼요: 모두 홀수·짝수, 모두 1~22·23~45, 합계 80 미만·200 초과, 4연속, 연속 쌍 3개, 한 번호대(1~10
+                등)에 5개, 같은 끝자리 4개, 용지 한 줄에 4개, 직전 회차 번호 4개 이상. 전체 조합의{' '}
+                {Math.round(RARE_SHAPE_SHARE * 100)}%이고, 역대 {draws.length.toLocaleString('ko-KR')}회 중{' '}
+                {rareHistory}회가 이런 모양이었어요.
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                빼도 한 장의 당첨 확률은 그대로예요. 드문 모양은 조합 수가 적어서 드물게 나올 뿐, 조합 하나하나는 다른 조합과
+                똑같이 나와요. 세부 조건에서 끌 수 있어요.
+              </ThemedText>
+            </View>
+          </Collapsible>
+        </Card>
+        <Card>
+          <Collapsible title="여러 세트를 살 때 번호를 안 겹치게 뽑는 이유">
+            <View style={styles.explain}>
+              <ThemedText type="small" themeColor="textSecondary">
+                한 장의 당첨 확률은 어떤 번호든 같아서, 번호를 고르는 방법으로는 바꿀 수 없어요. 역대 당첨번호로 3,000가지 규칙을
+                시험해도 새 회차를 무작위보다 잘 맞힌 규칙은 없었어요.
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                여러 장을 살 때는 달라요. 세트끼리 번호가 겹치면 당첨도 한 주에 몰려서 나오고, 안 겹치면 더 많은 주에 고르게
+                나와요. 그래서 이번 주에 하나라도 5등 이상 될 확률이 올라가요. 815만 가지 추첨 결과를 모두 대입해 계산했어요.
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                3세트 6.98% → 7.14%, 5세트 11.36% → 11.87%, 10세트 21.43% → 약 22~23%. 1등 확률과 평균 당첨 장수는 같아요.
+              </ThemedText>
+            </View>
+          </Collapsible>
+        </Card>
         <Card>
           <Collapsible title="'남들이 안 고르는 번호'는 어떻게 골랐나요?">
             <View style={styles.explain}>
@@ -731,4 +857,5 @@ const styles = StyleSheet.create({
   conditions: { gap: Spacing.four },
   field: { gap: 10 },
   explain: { gap: Spacing.two },
+  chance: { borderRadius: Radius.md, padding: 12, gap: 4, marginTop: 4 },
 });

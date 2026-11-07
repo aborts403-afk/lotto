@@ -18,7 +18,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
 import { formatKRWShort } from '@/lib/format';
 import { parseNumbers } from '@/lib/lotto/check';
-import { generate, type Combo } from '@/lib/lotto/generator';
+import { generate, pastWinningKeys, type Combo } from '@/lib/lotto/generator';
 import { diagnose, estimatePayout, type PayoutEstimate } from '@/lib/lotto/payout';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
 
@@ -86,7 +86,7 @@ function Result({ numbers, nextRound, onToast }: { numbers: Combo; nextRound: nu
   const alternative = useMemo(() => {
     if (d.verdict === 'unpopular') return null;
     const keep = [...d.quietNumbers].slice(0, 2);
-    const candidates = generate({ mode: 'unpopular', count: 3, fixed: keep }).sets.map((s) => s.numbers);
+    const candidates = generate({ mode: 'unpopular', count: 3, fixed: keep, pastWinning: pastWinningKeys(draws), previous: draws[0]?.numbers, spread: false }).sets.map((s) => s.numbers);
     const best = candidates
       .map((c) => ({ numbers: c, payout: estimatePayout(c, draws) }))
       .sort((a, b) => b.payout.net - a.payout.net)[0];

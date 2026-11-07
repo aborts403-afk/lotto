@@ -1,7 +1,14 @@
 // Sanity checks for src/lib/lotto/generator.ts:  npm run check:generator
 import assert from 'node:assert/strict';
 import {
+  anyPrizeChance,
+  disjointPrizeChance,
   generate,
+  independentPrizeChance,
+  maxPairOverlap,
+  pastWinningKeys,
+  rareShape,
+  simulatedPrizeChance,
   generateUnpopular,
   hashSeed,
   isBalanced,
@@ -76,8 +83,12 @@ assert.ok(wheelFixed.sets.every((s) => s.numbers.includes(3)));
 
 // Weighted: number 45 gets almost all the weight, so it should appear in nearly every set.
 const weights = Array.from({ length: 45 }, (_, i) => (i === 44 ? 1000 : 1));
-const hot = generate({ mode: 'hot', count: 10, weights });
+const hot = generate({ mode: 'hot', count: 10, weights, spread: false });
 assert.ok(hot.sets.filter((s) => s.numbers.includes(45)).length >= 9);
+// With spreading (the default) a favorite cannot be in every set; it still leads the first one.
+const hotSpread = generate({ mode: 'hot', count: 10, weights });
+assert.ok(hotSpread.sets[0].numbers.includes(45));
+assert.ok(maxPairOverlap(hotSpread.sets.map((s) => s.numbers)) <= 1);
 const hotOdd = generate({ mode: 'hot', count: 10, weights, oddCount: 2 });
 assert.ok(hotOdd.sets.every((s) => s.numbers.filter((n) => n % 2 === 1).length === 2));
 
@@ -87,4 +98,48 @@ const b = generate({ mode: 'phrase', count: 3 }, seededRng(hashSeed('홍길동|1
 const c = generate({ mode: 'phrase', count: 3 }, seededRng(hashSeed('홍길동|1250')));
 assert.deepEqual(a.sets, b.sets);
 assert.notDeepEqual(a.sets, c.sets);
+
+// Spreading and past winning combinations
+// Exact values from enumerating all 8,145,060 draws (2.383%, 7.135%, 11.868% for 1, 3, 5 disjoint sets).
+const disjoint = (n: number) => Array.from({ length: n }, (_, i) => Array.from({ length: 6 }, (_, j) => i * 6 + j + 1));
+assert.ok(Math.abs(disjointPrizeChance(disjoint(1))! - 0.023831) < 1e-5);
+assert.ok(Math.abs(disjointPrizeChance(disjoint(3))! - 0.07135) < 1e-4);
+assert.ok(Math.abs(disjointPrizeChance(disjoint(5))! - 0.11868) < 1e-4);
+assert.ok(Math.abs(independentPrizeChance(5) - 0.11364) < 1e-4);
+assert.equal(disjointPrizeChance([[1, 2, 3, 4, 5, 6], [6, 7, 8, 9, 10, 11]]), null);
+
+const lastWin = [16, 18, 27, 36, 38, 42];
+const past = pastWinningKeys([{ numbers: lastWin }]);
+const onlyPast = generate({ mode: 'random', count: 1, fixed: [16, 18, 27, 36, 38], excluded: Array.from({ length: 45 }, (_, i) => i + 1).filter((n) => ![16, 18, 27, 36, 38, 42, 43].includes(n)), pastWinning: past });
+assert.deepEqual(onlyPast.sets.map((x) => x.numbers), [[16, 18, 27, 36, 38, 43]]);
+
+for (const mode of ['random', 'unpopular', 'balanced', 'phrase'] as const) {
+  for (const count of [3, 5, 10]) {
+    const r = generate({ mode, count, pastWinning: past }, mode === 'phrase' ? seededRng(7) : Math.random);
+    assert.equal(r.sets.length, count);
+    const nums = r.sets.map((x) => x.numbers);
+    assert.ok(maxPairOverlap(nums) <= (count * 6 > 45 ? 1 : 0), `${mode} ${count} overlap ${maxPairOverlap(nums)}`);
+    assert.ok(anyPrizeChance(nums)!.chance > independentPrizeChance(count));
+  }
+}
+const loose = generate({ mode: 'random', count: 5, spread: false });
+assert.equal(loose.sets.length, 5);
+// Rare shapes
+assert.equal(rareShape([1, 3, 5, 7, 9, 11]), 'oddEven');
+assert.equal(rareShape([23, 25, 30, 34, 40, 44]), 'highLow');
+assert.equal(rareShape([1, 2, 5, 10, 24, 30]), 'sumLow');
+assert.equal(rareShape([10, 11, 12, 13, 30, 41]), 'run4');
+assert.equal(rareShape([3, 13, 23, 33, 40, 44]), 'lastDigit4');
+assert.equal(rareShape([4, 15, 23, 36, 41, 45]), null);
+assert.equal(rareShape([16, 18, 27, 36, 5, 9], [16, 18, 27, 36, 38, 42]), 'previous4');
+for (const mode of ['random', 'unpopular', 'hot'] as const) {
+  const r = generate({ mode, count: 10, weights: Array(45).fill(1), previous: [16, 18, 27, 36, 38, 42] });
+  assert.ok(r.sets.every((x) => rareShape(x.numbers, [16, 18, 27, 36, 38, 42]) === null), mode);
+}
+const forced = generate({ mode: 'random', count: 3, fixed: [1, 2, 3, 4] });
+assert.ok(forced.sets.length === 3 && forced.rareRelaxed);
+
+// Simulation agrees with the exact count on a disjoint layout.
+assert.ok(Math.abs(simulatedPrizeChance(disjoint(5)) - 0.11868) < 0.003);
+console.log('spread: 5 sets', (anyPrizeChance(disjoint(5))!.chance * 100).toFixed(2), '% vs auto', (independentPrizeChance(5) * 100).toFixed(2), '%');
 console.log('ok');

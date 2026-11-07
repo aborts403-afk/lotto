@@ -22,7 +22,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { formatDateDots, formatKRW, formatKRWShort } from '@/lib/format';
 import { checkTicket } from '@/lib/lotto/check';
 import { DRAWS_DESC, firstPrizeSharing } from '@/lib/lotto/draws';
-import { generate } from '@/lib/lotto/generator';
+import { generate, pastWinningKeys } from '@/lib/lotto/generator';
 import { estimatePayout } from '@/lib/lotto/payout';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
 
@@ -48,7 +48,7 @@ function RecommendHero({ nextRound }: { nextRound: number }) {
   // Random, so made after hydration (the static HTML shows empty slots).
   const pick = useMemo(() => {
     if (!hydrated) return null;
-    const numbers = generate({ mode: 'unpopular', count: 1 }).sets[0].numbers;
+    const numbers = generate({ mode: 'unpopular', count: 1, pastWinning: pastWinningKeys(draws), previous: draws[0]?.numbers }).sets[0].numbers;
     return { numbers, payout: estimatePayout(numbers, draws) };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `roll` asks for another set
   }, [hydrated, draws, roll]);
